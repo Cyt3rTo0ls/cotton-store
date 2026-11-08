@@ -1,6 +1,6 @@
 /* =========================================================
-   COTTON STORE — Catálogo 2026
-   Catálogo estático + filtros + ficha de producto + WhatsApp
+   COTTON STORE — Catálogo
+   Selector de categoría + piezas + ficha + WhatsApp
    ========================================================= */
 (() => {
   "use strict";
@@ -10,9 +10,12 @@
   const WA = "584120522641";
   const PAGE_SIZE = 24;
 
-  const grid = $("#productGrid");
+  const picker = $("#categoryPicker");
+  const categoryGrid = $("#categoryGrid");
+  const browser = $("#catalogBrowser");
+  const browserTitle = $("#browserTitle");
+  const browserDesc = $("#browserDesc");
   const chipsWrap = $("#categoryChips");
-  const rail = $("#categoriesRail");
   const lineSelect = $("#lineSelect");
   const sortSelect = $("#sortSelect");
   const searchInput = $("#searchInput");
@@ -41,9 +44,8 @@
   const state = {
     items: [],
     categories: [],
-    store: {},
     filtered: [],
-    cat: "all",
+    cat: "",
     line: "",
     q: "",
     sort: "default",
@@ -55,6 +57,7 @@
   };
 
   const catBySlug = () => Object.fromEntries(state.categories.map((c) => [c.slug, c]));
+  const currentCat = () => catBySlug()[state.cat];
 
   /* ---------- utilidades ---------- */
   const esc = (str) =>
@@ -79,6 +82,7 @@
 
   const toastTimer = { id: 0 };
   function showToast(msg) {
+    if (!toast) return;
     toast.textContent = msg;
     toast.classList.add("is-visible");
     clearTimeout(toastTimer.id);
@@ -98,7 +102,6 @@
 
   /* ---------- datos ---------- */
   async function loadCatalog() {
-    // se guarda antes de sincronizar la URL (syncURL limpia ?p)
     const deepRef = new URLSearchParams(window.location.search).get("p");
     try {
       const res = await fetch("assets/data/catalog.json", { cache: "no-cache" });
@@ -106,7 +109,6 @@
       const data = await res.json();
       state.items = data.items || [];
       state.categories = data.categories || [];
-      state.store = data.store || {};
 
       state.items.forEach((item) => {
         item._search = norm(
@@ -114,143 +116,144 @@
         );
       });
 
-      const totalEl = $("#totalPieces");
-      if (totalEl) totalEl.textContent = state.items.length;
-      const statTotal = $("[data-stat-total]");
-      if (statTotal) statTotal.textContent = state.items.length;
-      const statCats = $("[data-stat-cats]");
-      if (statCats) statCats.textContent = state.categories.length;
-
-      renderCategories();
+      renderPicker();
       renderChips();
       restoreFromURL();
-      buildLineOptions();
-      applyFilters({ scroll: false });
-      handleDeepProduct(deepRef);
+
+      if (deepRef) {
+        const item = state.items.find((i) => i.ref.toLowerCase() === deepRef.toLowerCase());
+        if (item) {
+          state.cat = item.category;
+          state.line = "";
+          state.q = "";
+          searchInput.value = "";
+          searchClear.hidden = true;
+          syncChips();
+        }
+      }
+
+      if (state.cat && currentCat()) {
+        showBrowser();
+        buildLineOptions();
+        applyFilters({ scroll: false });
+        if (deepRef) {
+          const item = state.items.find((i) => i.ref.toLowerCase() === deepRef.toLowerCase());
+          if (item) setTimeout(() => openModal(item), 180);
+        }
+      } else {
+        showPicker();
+      }
     } catch (err) {
       console.error("No se pudo cargar el catálogo:", err);
-      if (grid) {
-        grid.setAttribute("aria-busy", "false");
-        grid.innerHTML = "";
-      }
-      if (resultsCount) resultsCount.textContent = "No se pudo cargar el catálogo";
-      if (emptyState) {
-        emptyState.hidden = false;
-        emptyState.querySelector("h3").textContent = "El catálogo no cargó.";
-        emptyState.querySelector("p").textContent =
-          "Revisa tu conexión y recarga la página, o escríbenos por WhatsApp y te enviamos el catálogo al momento.";
+      if (categoryGrid) {
+        categoryGrid.innerHTML =
+          '<p class="rail-loading">No pudimos cargar las categorías. Revisa tu conexión o escríbenos por WhatsApp.</p>';
       }
     }
   }
 
-  /* ---------- categorías ---------- */
-  function renderCategories() {
-    if (!rail) return;
-    rail.innerHTML = state.categories
+  /* ---------- selector de categorías ---------- */
+  function renderPicker() {
+    if (!categoryGrid) return;
+    categoryGrid.innerHTML = state.categories
       .map(
         (cat, i) => `
-      <a class="cat-card" href="#catalogo" data-cat="${cat.slug}" aria-label="Ver ${cat.label}: ${cat.count} piezas">
+      <a class="cat-card" href="catalogo.html?cat=${encodeURIComponent(cat.slug)}" data-cat="${cat.slug}">
         <img src="${cat.cover}" alt="" loading="lazy" decoding="async" width="600" height="750">
         <span class="cat-index">${pad(i + 1)}</span>
         <div class="cat-body">
           <div>
             <h3>${esc(cat.label)}</h3>
-            <p>${cat.count} piezas</p>
+            <p>Ver categoría</p>
           </div>
           <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
         </div>
       </a>`
       )
       .join("");
-
-    $$(".cat-card", rail).forEach((card) => {
-      card.addEventListener("click", (event) => {
-        event.preventDefault();
-        setCategory(card.dataset.cat);
-        document.getElementById("catalogo").scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-
-    requestAnimationFrame(updateRailArrows);
   }
 
   function renderChips() {
     if (!chipsWrap) return;
-    const all = `<button type="button" class="chip is-active" data-cat="all">Todo <span>${state.items.length}</span></button>`;
-    chipsWrap.innerHTML =
-      all +
-      state.categories
-        .map(
-          (cat) =>
-            `<button type="button" class="chip" data-cat="${cat.slug}">${esc(cat.label)} <span>${cat.count}</span></button>`
-        )
-        .join("");
+    chipsWrap.innerHTML = state.categories
+      .map(
+        (cat) =>
+          `<button type="button" class="chip${cat.slug === state.cat ? " is-active" : ""}" data-cat="${cat.slug}">${esc(cat.label)}</button>`
+      )
+      .join("");
 
     $$(".chip", chipsWrap).forEach((chip) => {
       chip.addEventListener("click", () => setCategory(chip.dataset.cat));
     });
   }
 
-  function setCategory(slug) {
-    state.cat = slug || "all";
-    state.line = "";
+  function syncChips() {
     $$(".chip", chipsWrap).forEach((chip) =>
       chip.classList.toggle("is-active", chip.dataset.cat === state.cat)
     );
+  }
+
+  function showPicker() {
+    if (picker) picker.hidden = false;
+    if (browser) browser.hidden = true;
+    document.title = "Catálogo | Cotton Store";
+  }
+
+  function showBrowser() {
+    const cat = currentCat();
+    if (!cat) {
+      showPicker();
+      return;
+    }
+    if (picker) picker.hidden = true;
+    if (browser) browser.hidden = false;
+    if (browserTitle) browserTitle.textContent = cat.label.toUpperCase();
+    if (browserDesc) {
+      browserDesc.textContent =
+        cat.blurb || "Piezas seleccionadas por Cotton Store. Tallas y disponibilidad por WhatsApp.";
+    }
+    document.title = `${cat.label} | Cotton Store`;
+  }
+
+  function setCategory(slug) {
+    if (!catBySlug()[slug]) return;
+    state.cat = slug;
+    state.line = "";
+    state.q = "";
+    searchInput.value = "";
+    searchClear.hidden = true;
+    syncChips();
+    showBrowser();
     buildLineOptions();
     applyFilters();
   }
 
   function buildLineOptions() {
     if (!lineSelect) return;
+    const cat = currentCat();
+    if (!cat) return;
 
-    // una línea siempre pertenece a una categoría
-    if (state.cat === "all" && state.line) {
-      const parent = state.categories.find((c) =>
-        c.lines.some((l) => l.label === state.line)
-      );
-      if (parent) {
-        state.cat = parent.slug;
-        $$(".chip", chipsWrap).forEach((chip) =>
-          chip.classList.toggle("is-active", chip.dataset.cat === state.cat)
-        );
-      }
-    }
-
-    const cats = state.cat === "all"
-      ? state.categories
-      : state.categories.filter((c) => c.slug === state.cat);
-
-    if (state.line && !cats.some((c) => c.lines.some((l) => l.label === state.line))) {
+    if (state.line && !cat.lines.some((l) => l.label === state.line)) {
       state.line = "";
     }
 
-    const groups = cats
-      .filter((c) => c.lines.length)
-      .map(
-        (c) =>
-          `<optgroup label="${esc(c.label)}">` +
-          c.lines
-            .map(
-              (l) =>
-                `<option value="${c.slug}|${esc(l.label)}">${esc(l.label)} (${l.count})</option>`
-            )
-            .join("") +
-          `</optgroup>`
-      )
-      .join("");
+    const groups = cat.lines.length
+      ? cat.lines
+          .map(
+            (l) => `<option value="${esc(l.label)}">${esc(l.label)}</option>`
+          )
+          .join("")
+      : "";
 
     lineSelect.innerHTML = `<option value="">Todas las líneas</option>${groups}`;
-    lineSelect.value = state.line ? `${state.cat}|${state.line}` : "";
+    lineSelect.value = state.line || "";
   }
 
   /* ---------- filtros ---------- */
   function filteredItems() {
-    let list = state.items;
+    if (!state.cat) return [];
+    let list = state.items.filter((item) => item.category === state.cat);
 
-    if (state.cat !== "all") {
-      list = list.filter((item) => item.category === state.cat);
-    }
     if (state.line) {
       list = list.filter((item) => item.line === state.line);
     }
@@ -277,27 +280,33 @@
   }
 
   function applyFilters({ scroll = false } = {}) {
+    if (!state.cat || !currentCat()) {
+      showPicker();
+      return;
+    }
+
+    showBrowser();
     state.filtered = filteredItems();
     state.shown = 0;
-    grid.innerHTML = "";
-    grid.setAttribute("aria-busy", "true");
+    $("#productGrid").innerHTML = "";
+    $("#productGrid").setAttribute("aria-busy", "true");
 
-    const active = state.q || state.cat !== "all" || state.line;
+    const active = Boolean(state.q || state.line);
     if (resetFilters) resetFilters.hidden = !active;
 
     if (!state.filtered.length) {
       emptyState.hidden = false;
       loadMoreBtn.hidden = true;
       loadMoreNote.hidden = true;
-      resultsCount.textContent = "0 piezas";
-      grid.setAttribute("aria-busy", "false");
+      resultsCount.textContent = "Sin resultados";
+      $("#productGrid").setAttribute("aria-busy", "false");
       syncURL();
       return;
     }
 
     emptyState.hidden = true;
     renderBatch();
-    grid.setAttribute("aria-busy", "false");
+    $("#productGrid").setAttribute("aria-busy", "false");
     syncURL();
 
     if (scroll) {
@@ -306,6 +315,7 @@
   }
 
   function renderBatch() {
+    const grid = $("#productGrid");
     const next = state.filtered.slice(state.shown, state.shown + PAGE_SIZE);
     const frag = document.createDocumentFragment();
 
@@ -334,34 +344,27 @@
     const remaining = state.filtered.length - state.shown;
     loadMoreBtn.hidden = remaining <= 0;
     loadMoreNote.hidden = remaining <= 0;
-    if (remaining > 0) {
-      loadMoreNote.textContent = `Mostrando ${state.shown} de ${state.filtered.length} piezas`;
-    }
+    if (remaining > 0) loadMoreNote.textContent = "Hay más piezas disponibles";
 
     updateResultsLabel();
-    observeCards();
   }
 
   function updateResultsLabel() {
-    const total = state.filtered.length;
-    const shown = state.shown;
-    const pieceWord = total === 1 ? "pieza" : "piezas";
-    if (shown < total) {
-      resultsCount.textContent = `Mostrando ${shown} de ${total} ${pieceWord}`;
-    } else {
-      resultsCount.textContent = `${total} ${pieceWord}`;
+    if (!resultsCount) return;
+    if (!state.filtered.length) {
+      resultsCount.textContent = "Sin resultados";
+      return;
     }
-  }
-
-  function observeCards() {
-    if (!("IntersectionObserver" in window)) return;
-    // El centinela se encarga del scroll infinito; no hace falta observar cada card.
+    const cat = currentCat();
+    resultsCount.textContent = state.line
+      ? `Línea ${state.line}`
+      : `Piezas de ${cat ? cat.label : "la categoría"}`;
   }
 
   function syncURL() {
     const params = new URLSearchParams(window.location.search);
-    if (state.cat === "all") params.delete("cat");
-    else params.set("cat", state.cat);
+    if (state.cat) params.set("cat", state.cat);
+    else params.delete("cat");
 
     if (state.line) params.set("line", state.line);
     else params.delete("line");
@@ -369,48 +372,46 @@
     if (state.q.trim()) params.set("q", state.q.trim());
     else params.delete("q");
 
+    if (state.sort !== "default") params.set("sort", state.sort);
+    else params.delete("sort");
+
     if (!state.modalOpen) params.delete("p");
 
     const qs = params.toString();
-    const url = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
-    history.replaceState(null, "", url);
+    history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
   }
 
   function restoreFromURL() {
     const params = new URLSearchParams(window.location.search);
     const cat = params.get("cat");
-    if (cat && state.categories.some((c) => c.slug === cat)) {
-      state.cat = cat;
-      $$(".chip", chipsWrap).forEach((chip) =>
-        chip.classList.toggle("is-active", chip.dataset.cat === state.cat)
-      );
-    }
+    if (cat && state.categories.some((c) => c.slug === cat)) state.cat = cat;
+
     const line = params.get("line");
     if (line) state.line = line;
+
     const q = params.get("q");
     if (q) {
       state.q = q;
       searchInput.value = q;
       searchClear.hidden = false;
     }
+
     const sort = params.get("sort");
     if (["default", "price-asc", "price-desc", "az"].includes(sort)) {
       state.sort = sort;
       sortSelect.value = sort;
     }
+
+    syncChips();
   }
 
   function resetAll() {
-    state.cat = "all";
     state.line = "";
     state.q = "";
     state.sort = "default";
     searchInput.value = "";
     searchClear.hidden = true;
     sortSelect.value = "default";
-    $$(".chip", chipsWrap).forEach((chip) =>
-      chip.classList.toggle("is-active", chip.dataset.cat === "all")
-    );
     buildLineOptions();
     applyFilters();
   }
@@ -425,7 +426,10 @@
     modalTitle.textContent = item.name;
     modalCat.textContent = `${item.categoryLabel}${item.line ? ` · Línea ${item.line}` : ""}`;
     modalRef.textContent = item.ref;
-    modalCounter.textContent = `${pad(index + 1)} / ${pad(state.filtered.length)}`;
+    if (modalCounter) {
+      modalCounter.textContent = `${pad(index + 1)} / ${pad(state.filtered.length)}`;
+      modalCounter.hidden = true;
+    }
 
     if (item.price) {
       modalPrice.classList.remove("is-consult");
@@ -454,13 +458,19 @@
     modalPrev.hidden = !hasMany;
     modalNext.hidden = !hasMany;
 
-    // precarga de vecinos
     if (hasMany) {
       [index - 1, index + 1].forEach((i) => {
         const neighbor = state.filtered[(i + state.filtered.length) % state.filtered.length];
         if (neighbor) new Image().src = neighbor.img;
       });
     }
+  }
+
+  function modalURL(item) {
+    const params = new URLSearchParams(window.location.search);
+    if (state.cat) params.set("cat", state.cat);
+    params.set("p", item.ref);
+    return `${location.pathname}?${params}${location.hash}`;
   }
 
   function openModal(item) {
@@ -475,10 +485,7 @@
     syncBodyLock();
     requestAnimationFrame(() => modal.classList.add("is-open"));
     modalClose.focus({ preventScroll: true });
-
-    const params = new URLSearchParams(window.location.search);
-    params.set("p", item.ref);
-    history.replaceState(null, "", `${location.pathname}?${params}${location.hash}`);
+    history.replaceState(null, "", modalURL(item));
   }
 
   function closeModal() {
@@ -500,16 +507,15 @@
   function navigate(delta) {
     if (!state.filtered.length) return;
     state.current = (state.current + delta + state.filtered.length) % state.filtered.length;
-    fillModal(state.filtered[state.current], state.current);
-    const params = new URLSearchParams(window.location.search);
-    params.set("p", state.filtered[state.current].ref);
-    history.replaceState(null, "", `${location.pathname}?${params}${location.hash}`);
+    const item = state.filtered[state.current];
+    fillModal(item, state.current);
+    history.replaceState(null, "", modalURL(item));
   }
 
   async function shareCurrent() {
     const item = state.filtered[state.current];
     if (!item) return;
-    const url = `${location.origin}${location.pathname}?p=${encodeURIComponent(item.ref)}`;
+    const url = `${location.origin}${location.pathname}?cat=${encodeURIComponent(item.category)}&p=${encodeURIComponent(item.ref)}`;
     const data = {
       title: `${item.name} — Cotton Store`,
       text: `${item.name} (${item.ref}) en Cotton Store.`,
@@ -531,80 +537,46 @@
     }
   }
 
-  function handleDeepProduct(ref) {
-    if (!ref) return;
-    const item = state.items.find((i) => i.ref.toLowerCase() === ref.toLowerCase());
-    if (!item) return;
+  /* ---------- menú móvil ---------- */
+  function openMenu() {
+    const menu = $("#mobileMenu");
+    if (!menu) return;
+    menu.hidden = false;
+    state.menuOpen = true;
+    syncBodyLock();
+    requestAnimationFrame(() => menu.classList.add("is-open"));
+    $("#menuToggle").setAttribute("aria-expanded", "true");
+    $("#menuClose").focus({ preventScroll: true });
+  }
 
-    // si los filtros de la URL esconden la pieza, los limpiamos
-    if (!state.filtered.some((i) => i.ref === item.ref)) {
-      state.cat = item.category;
-      state.line = "";
-      state.q = "";
-      searchInput.value = "";
-      searchClear.hidden = true;
-      $$(".chip", chipsWrap).forEach((chip) =>
-        chip.classList.toggle("is-active", chip.dataset.cat === state.cat)
-      );
-      buildLineOptions();
-      applyFilters();
+  function closeMenu() {
+    const menu = $("#mobileMenu");
+    if (!menu || !state.menuOpen) return;
+    state.menuOpen = false;
+    menu.classList.remove("is-open");
+    $("#menuToggle").setAttribute("aria-expanded", "false");
+    setTimeout(() => {
+      menu.hidden = true;
+      syncBodyLock();
+    }, 300);
+  }
+
+  function trapFocus(event) {
+    const panel = modal.querySelector(".modal-panel");
+    const focusable = $$(
+      'a[href], button:not([disabled]):not([hidden]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      panel
+    ).filter((el) => el.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
-    setTimeout(() => openModal(item), 150);
-  }
-
-  /* ---------- categorías: flechas del rail ---------- */
-  function updateRailArrows() {
-    const prev = $("#railPrev");
-    const next = $("#railNext");
-    if (!prev || !next || !rail) return;
-    const max = rail.scrollWidth - rail.clientWidth - 2;
-    const scrollable = max > 4;
-    prev.hidden = !scrollable || rail.scrollLeft <= 2;
-    next.hidden = !scrollable || rail.scrollLeft >= max;
-  }
-
-  function initRail() {
-    const prev = $("#railPrev");
-    const next = $("#railNext");
-    if (!prev || !next || !rail) return;
-    const step = () => {
-      const card = rail.querySelector(".cat-card");
-      return card ? (card.getBoundingClientRect().width + 12) * 2 : 560;
-    };
-    prev.addEventListener("click", () => rail.scrollBy({ left: -step(), behavior: "smooth" }));
-    next.addEventListener("click", () => rail.scrollBy({ left: step(), behavior: "smooth" }));
-    rail.addEventListener("scroll", updateRailArrows, { passive: true });
-    window.addEventListener("resize", updateRailArrows);
-    updateRailArrows();
-  }
-
-  /* ---------- animaciones de entrada ---------- */
-  function initReveal() {
-    const targets = $$(
-      ".section-head:not(.reveal), .steps-grid:not(.reveal), .steps-cta, .about-panel, .about-copy, .contact-grid"
-    );
-    targets.forEach((el, i) => {
-      el.classList.add("reveal");
-      if (i % 3 === 1) el.classList.add("reveal-delay-1");
-      if (i % 3 === 2) el.classList.add("reveal-delay-2");
-    });
-
-    if (!("IntersectionObserver" in window)) {
-      targets.forEach((el) => el.classList.add("is-in"));
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-in");
-            io.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
-    );
-    targets.forEach((el) => io.observe(el));
   }
 
   /* ---------- eventos ---------- */
@@ -625,17 +597,7 @@
     });
 
     lineSelect.addEventListener("change", () => {
-      const val = lineSelect.value;
-      if (!val) {
-        state.line = "";
-      } else {
-        const [cat, ...rest] = val.split("|");
-        state.cat = cat;
-        state.line = rest.join("|");
-        $$(".chip", chipsWrap).forEach((chip) =>
-          chip.classList.toggle("is-active", chip.dataset.cat === state.cat)
-        );
-      }
+      state.line = lineSelect.value;
       applyFilters();
     });
 
@@ -645,10 +607,9 @@
     });
 
     resetFilters.addEventListener("click", resetAll);
-
     loadMoreBtn.addEventListener("click", renderBatch);
 
-    grid.addEventListener("click", (event) => {
+    $("#productGrid").addEventListener("click", (event) => {
       const card = event.target.closest(".card");
       if (!card) return;
       const item = state.items.find((i) => i.ref === card.dataset.ref);
@@ -678,7 +639,6 @@
       }
     });
 
-    // swipe en móvil
     let touchX = null;
     let touchY = null;
     modal.querySelector(".modal-media").addEventListener(
@@ -720,55 +680,10 @@
       if (sentinel) io.observe(sentinel);
     }
 
-    // año dinámico
     const year = $("#year");
     if (year) year.textContent = new Date().getFullYear();
   }
 
-  function trapFocus(event) {
-    const panel = modal.querySelector(".modal-panel");
-    const focusable = $$(
-      'a[href], button:not([disabled]):not([hidden]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      panel
-    ).filter((el) => el.offsetParent !== null);
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
-  function openMenu() {
-    const menu = $("#mobileMenu");
-    if (!menu) return;
-    menu.hidden = false;
-    state.menuOpen = true;
-    syncBodyLock();
-    requestAnimationFrame(() => menu.classList.add("is-open"));
-    $("#menuToggle").setAttribute("aria-expanded", "true");
-    $("#menuClose").focus({ preventScroll: true });
-  }
-
-  function closeMenu() {
-    const menu = $("#mobileMenu");
-    if (!menu || !state.menuOpen) return;
-    state.menuOpen = false;
-    menu.classList.remove("is-open");
-    $("#menuToggle").setAttribute("aria-expanded", "false");
-    setTimeout(() => {
-      menu.hidden = true;
-      syncBodyLock();
-    }, 300);
-  }
-
-  /* ---------- arranque ---------- */
-  initReveal();
   bind();
-  initRail();
   loadCatalog();
 })();

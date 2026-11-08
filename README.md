@@ -2,9 +2,9 @@
 
 Sitio estático del catálogo de **Cotton Store**, tienda de ropa urbana en San Felipe, Yaracuy (Venezuela).
 
-- **Web publicada:** https://cyt3rto0ls.github.io/
-- **Repositorio:** https://github.com/Cyt3rTo0ls/Cyt3rTo0ls.github.io
-- **Catálogo:** 484 piezas · 13 categorías · pedidos por WhatsApp · envíos a toda Venezuela.
+- **Web publicada:** https://cyt3rto0ls.github.io/cotton-store/
+- **Repositorio:** https://github.com/Cyt3rTo0ls/cotton-store
+- **Catálogo completo** organizado en 13 categorías · pedidos por WhatsApp · envíos a toda Venezuela.
 
 ## Stack
 
@@ -16,11 +16,13 @@ Los datos viven en `assets/data/catalog.json` y las imágenes en `assets/img/cat
 ```
 .
 ├── index.html                  # Página principal
+├── catalogo.html               # Catálogo por categorías
 ├── 404.html                    # Página de error
 ├── assets/
 │   ├── css/styles.css          # Sistema visual completo
-│   ├── js/app.js               # Catálogo, filtros, modal, WhatsApp
-│   ├── data/catalog.json       # Datos generados (484 piezas)
+│   ├── js/home.js              # Inicio: categorías y menú
+│   ├── js/catalogo.js          # Catálogo: selector, filtros, ficha, WhatsApp
+│   ├── data/catalog.json       # Datos del catálogo
 │   └── img/                    # WebP optimizados, logo, OG, iconos
 ├── tools/
 │   ├── sync_catalog.py         # Descarga el Drive (reanudable, soporta HEIC)
@@ -41,6 +43,8 @@ python3 -m http.server 8099
 ```
 
 Abre siempre con un servidor: el catálogo se carga con `fetch()` y necesita HTTP.
+
+El inicio no muestra el inventario: lleva a `catalogo.html`, donde se elige una categoría y recién ahí se ven las piezas.
 
 ## Regenerar el catálogo (cuando hay piezas nuevas)
 
@@ -78,7 +82,7 @@ Después de cambiarlos, vuelve a correr `build_assets.py`.
 
 ## Publicación
 
-El repositorio es un **GitHub Pages de usuario** (`Cyt3rTo0ls.github.io`), por lo que la web queda en la raíz del dominio.
+El repositorio es un **GitHub Pages de proyecto** (`cotton-store`), publicado en `https://cyt3rto0ls.github.io/cotton-store/`.
 Pages está configurado desde la rama `main`, carpeta `/`.
 
 > **Seguridad:** el archivo `Datos` (token de GitHub, contactos internos) está en `.gitignore`

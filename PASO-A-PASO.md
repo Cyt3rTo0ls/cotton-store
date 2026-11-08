@@ -10,15 +10,15 @@
 Cotton Store es una tienda de ropa urbana en San Felipe, Yaracuy (Venezuela).
 La web es un **catálogo digital + embudo de pedidos por WhatsApp**:
 
-- Muestra las **484 piezas** del catálogo 2026 organizadas en **13 categorías** y sus líneas.
+- Muestra el catálogo 2026 organizado en **13 categorías** y sus líneas, sin publicar cantidades de inventario.
 - Permite buscar, filtrar por categoría/línea y ordenar por precio o nombre.
 - Cada pieza abre una ficha con foto grande, referencia, precio (si está definido) y botón de WhatsApp con el mensaje ya escrito.
 - Tiene enlaces compartibles: `?p=FR-ALI-01` abre la ficha; `?cat=franelas&line=Oversize` abre filtrado.
 - No hay carrito, pagos ni cuentas. El pedido se cierra por WhatsApp (+58 412-0522641).
 - Estética blanco y negro, tipografía pesada y editorial, alineada con el logotipo.
 
-**En línea:** https://cyt3rto0ls.github.io/
-**Repo:** https://github.com/Cyt3rTo0ls/Cyt3rTo0ls.github.io
+**En línea:** https://cyt3rto0ls.github.io/cotton-store/
+**Repo:** https://github.com/Cyt3rTo0ls/cotton-store
 
 ---
 
@@ -65,7 +65,7 @@ Detalles que costaron tiempo:
 - `gdown` fallaba con estos archivos y además no reanudaba; se cambió a `requests` + `curl`-like con hilos.
 - Había **18 archivos HEIC** (iPhone) y uno sin extensión (`Flare Jean`).
   Se instaló `pillow-heif` y el validador acepta HEIC.
-- Resultado: **484 archivos, 1.6 GB**. Los originales se quedan en local y están en `.gitignore`.
+- Resultado: el catálogo completo descargado (1.6 GB). Los originales se quedan en local y están en `.gitignore`.
 
 Comando:
 
@@ -120,7 +120,6 @@ Decisiones:
 {
   "generated": "2026-11-07",
   "store": { "whatsapp": "584120522641", "instagram": "...", "...": "..." },
-  "total": 484,
   "hero": [{ "img": "assets/img/hero/img-1285.webp" }],
   "categories": [{
     "slug": "franelas", "label": "Franelas", "count": 190,
@@ -147,8 +146,8 @@ Reglas de naming y referencias:
 - **Referencia:** `prefijo categoría - código de línea - número`.
   Ej.: `FR-ALT20-01`, `GO-AAA-02`, `PA-BAG-03`.
 - Los códigos de línea se generan con `line_code_map()` para evitar colisiones
-  (`ALT`, `ALT20`, `ALT32`, `DEP`, `DEP15`...). Verificado: **484 refs únicas**
-  y **484 nombres únicos**.
+  (`ALT`, `ALT20`, `ALT32`, `DEP`, `DEP15`...). Verificado: todas las referencias
+  y todos los nombres quedan únicos.
 - Precios: se toman de `PRICE_RULES` (solo las líneas cuyo nombre de carpeta trae precio).
   Las demás muestran “Precio por WhatsApp”. Actualmente **116 piezas con precio** y 368 a consultar.
 
@@ -178,22 +177,22 @@ Secciones de `index.html`:
 1. **Header sticky negro:** navegación, Instagram, CTA de WhatsApp, menú móvil.
 2. **Hero:** “ROPA URBANA SIN FILTROS”, texto de valor, 2 CTAs, métricas y collage de 3 fotos.
 3. **Ticker** animado con envíos/pedidos (se pausa al hover, se apaga con `reduced-motion`).
-4. **Categorías:** carrusel horizontal con scroll-snap, flechas y contador por categoría.
-5. **Catálogo:** chips de categoría, buscador, selector de línea, orden, grid y “cargar más”.
+4. **Categorías:** carrusel horizontal con scroll-snap y flechas; cada tarjeta lleva a su categoría. Sin contadores.
+5. **CTA de catálogo:** botón grande “Ver catálogo” que abre `catalogo.html`. El inicio no muestra inventario.
 6. **Cómo comprar:** 3 pasos + CTA.
 7. **Nosotros:** panel negro con logo, texto de tienda y valores.
 8. **Contacto:** WhatsApp, correo, dirección (Google Maps) y redes.
 9. **Footer:** wordmark gigante en contorno, navegación y aviso legal de precios.
-10. **Ficha de producto (modal):** foto grande, categoría/línea, ref, precio, nota,
-    descripción, CTA de WhatsApp, compartir, flechas, contador, swipe y teclado.
+10. **Catálogo (`catalogo.html`):** primero el selector de 13 categorías; al elegir una se muestran sus piezas con buscador, línea, orden, “cargar más” y ficha.
+11. **Ficha de producto (modal):** foto grande, categoría/línea, ref, precio, nota,
+    descripción, CTA de WhatsApp, compartir, flechas, swipe y teclado. Sin conteos de inventario.
 
 Responsive:
 
 - **Móvil (≤720 px):** 2 columnas de producto, menú fullscreen, hero apilado,
   modal a pantalla completa, barra de filtros no sticky, botón flotante de WhatsApp.
 - **Tablet (≤980 px):** 3 columnas, hero apilado, panel “Nosotros” horizontal.
-- **Laptop/desktop (≥1024 px):** 4 columnas, hero a dos columnas, filtros sticky,
-  5 columnas en pantallas grandes, flechas del carrusel.
+- **Laptop/desktop (≥1024 px):** grilla de 4 columnas, hero a dos columnas, filtros sticky y flechas del carrusel.
 
 Accesibilidad y detalles:
 
@@ -211,7 +210,8 @@ Accesibilidad y detalles:
 index.html                     Página principal
 404.html                       Error 404 con estética de la tienda
 assets/css/styles.css          Todo el diseño (tokens, componentes, responsive)
-assets/js/app.js               Lógica: fetch, filtros, modal, deep links, WA
+assets/js/home.js              Inicio: categorías, menú y animaciones
+assets/js/catalogo.js          Catálogo: selector, filtros, modal, deep links, WA
 assets/data/catalog.json       Datos generados
 assets/img/catalog/            WebP grandes + thumbs/
 assets/img/categories/         Portadas de categorías
@@ -245,7 +245,7 @@ python3 tools/sync_catalog.py
 python3 tools/build_assets.py
 
 # 4. Verificar sintaxis
-node --check assets/js/app.js
+node --check assets/js/catalogo.js && node --check assets/js/home.js
 
 # 5. Publicar
 git add -A
@@ -261,11 +261,11 @@ Dependencias usadas (ya instaladas con `pip --user`):
 
 ## 8. Publicación en GitHub Pages
 
-1. Se creó el repositorio **público** `Cyt3rTo0ls/Cyt3rTo0ls.github.io`
-   (repo de usuario: la web queda en la raíz del dominio).
-2. Se inicializó git en esta carpeta y se subió `main`.
-3. Se activó Pages por API con origen `main` / `/`.
-4. URL final: **https://cyt3rto0ls.github.io/**
+1. Se creó el repositorio **público** `Cyt3rTo0ls/cotton-store`
+   (GitHub Pages de proyecto: la web vive en `/cotton-store/`).
+2. Se inicializó git en esta carpeta y se subió `main`. Luego el repo se renombró a `cotton-store`.
+3. Se activó Pages por API con origen `main` / `/`; GitHub ajustó la URL al nombre del repo.
+4. URL final: **https://cyt3rto0ls.github.io/cotton-store/**
 
 Comandos de referencia:
 
@@ -273,7 +273,7 @@ Comandos de referencia:
 git init -b main
 git add -A
 git commit -m "Cotton Store — catálogo web 2026"
-git remote add origin https://github.com/Cyt3rTo0ls/Cyt3rTo0ls.github.io.git
+git remote add origin https://github.com/Cyt3rTo0ls/cotton-store.git
 git push -u origin main
 ```
 
@@ -282,7 +282,7 @@ Para activar Pages (una sola vez):
 ```bash
 curl -X POST -H "Authorization: token $TOKEN" \
   -H "Accept: application/vnd.github+json" \
-  https://api.github.com/repos/Cyt3rTo0ls/Cyt3rTo0ls.github.io/pages \
+  https://api.github.com/repos/Cyt3rTo0ls/cotton-store/pages \
   -d '{"source":{"branch":"main","path":"/"}}'
 ```
 
@@ -297,7 +297,7 @@ curl -X POST -H "Authorization: token $TOKEN" \
 3. `python3 tools/build_assets.py`
 4. `git add -A && git commit -m "Nuevas piezas" && git push`
 
-El número, la referencia y el nombre se generan solos.
+La referencia y el nombre se generan solos (el número interno no se publica).
 Si una línea es nueva, agregarla a `LINE_LABELS` y, si tiene precio, a `PRICE_RULES`.
 Si es una categoría nueva, agregarla a `CATEGORIES` (slug, prefijo, orden y descripción).
 
@@ -317,14 +317,16 @@ Para precios por pieza individual habría que agregar un campo manual en el JSON
 
 ## 10. Verificación hecha
 
-- `node --check assets/js/app.js` → OK.
+- `node --check assets/js/catalogo.js && node --check assets/js/home.js` → OK.
 - JSON y manifest parsean correctamente.
-- Render headless con Chrome: 24 tarjetas iniciales, 13 categorías, 14 chips,
-  contador “Mostrando 24 de 484 piezas”.
-- Filtro por URL `?cat=franelas&line=Oversize` → 34 resultados.
-- Deep link `?p=FR-ALI-01` → modal abierto con título, imagen y link de WhatsApp.
+- Inicio sin inventario visible: 0 tarjetas de producto, 13 categorías y CTA a `catalogo.html`.
+- Catálogo sin categoría: selector de categorías visible y grilla oculta.
+- Categoría elegida: 24 tarjetas iniciales y 13 chips para cambiar de categoría.
+- Filtro por URL `catalogo.html?cat=franelas&line=Oversize` → piezas de la línea.
+- Deep link `catalogo.html?cat=gorras&p=GO-AAA-02` → modal abierto con título, imagen y link de WhatsApp.
 - Búsqueda sin resultados → estado vacío visible.
-- 484 refs únicas, 484 nombres únicos y **0 archivos de imagen faltantes**.
+- Prueba real con CDP: clic en categoría, cambio de categoría, cargar más, modal, cierre con Esc, menú móvil y 0 errores de consola.
+- Referencias y nombres únicos, y **0 archivos de imagen faltantes**.
 - No se pudo completar una prueba E2E con Selenium/Playwright por incompatibilidad
   de los drivers del entorno (no por errores de la web). Las pruebas de DOM y de
   lógica de datos sí pasaron.
@@ -356,4 +358,4 @@ Pendientes sugeridos (no implementados):
 - TikTok: https://www.tiktok.com/@cottonstore.ven
 - Facebook: https://www.facebook.com/people/Cotton-Store/100085036136711/
 - Dirección: 87M5+WR5, Avenida 5 Libertador, San Felipe 3201, Yaracuy, Venezuela
-- Web: https://cyt3rto0ls.github.io/
+- Web: https://cyt3rto0ls.github.io/cotton-store/

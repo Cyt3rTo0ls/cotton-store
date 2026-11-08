@@ -1637,3 +1637,84 @@ a.contact-card:hover .contact-arrow { color: var(--white); }
   .site-header, .wa-float, .mobile-menu, .modal, .ticker, .hero-gallery { display: none !important; }
   body { background: #fff; }
 }
+
+/* ---------- 17. Catálogo en página aparte ---------- */
+[hidden] { display: none !important; }
+
+.catalog-page {
+  background: var(--paper);
+  padding-top: clamp(28px, 4vw, 52px);
+  min-height: 60svh;
+}
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: clamp(26px, 3vw, 40px);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.crumbs a { border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+.crumbs a:hover { color: var(--ink); border-color: var(--ink); }
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(10px, 1.4vw, 16px);
+}
+.cat-grid .cat-card { flex: none; width: 100%; }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: clamp(22px, 3vw, 34px);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.back-link .icon { width: 14px; height: 14px; }
+.back-link:hover { color: var(--ink); border-color: var(--ink); }
+
+.browser-head { margin-top: 6px; }
+.catalog-page .section-head { margin-bottom: clamp(24px, 3vw, 40px); }
+
+/* CTA de catálogo en el inicio */
+.catalog-cta { background: var(--ink); color: var(--white); }
+.catalog-cta-inner { max-width: 820px; }
+.catalog-cta .section-title .serif { -webkit-text-stroke-color: rgba(255, 255, 255, 0.72); }
+.catalog-cta-lead {
+  margin-top: 24px;
+  max-width: 560px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--muted-2);
+  text-wrap: pretty;
+}
+.catalog-cta-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+.catalog-cta-note {
+  margin-top: 26px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+@media (max-width: 1080px) {
+  .cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cat-grid .cat-body { padding: 12px; }
+  .cat-grid .cat-body h3 { font-size: 15px; }
+  .catalog-cta-actions .btn { width: 100%; }
+  .catalog-page { padding-top: 22px; }
+}

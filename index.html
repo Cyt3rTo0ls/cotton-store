@@ -6,21 +6,21 @@
   <title>Cotton Store | Ropa urbana en San Felipe, Yaracuy</title>
   <meta name="description" content="Tienda de ropa urbana en San Felipe, Yaracuy. Franelas, gorras, pantalones, zapatos y accesorios. Catálogo 2026 con envíos a toda Venezuela y pedidos por WhatsApp.">
   <meta name="theme-color" content="#0a0a0a">
-  <link rel="canonical" href="https://cyt3rto0ls.github.io/">
+  <link rel="canonical" href="https://cyt3rto0ls.github.io/cotton-store/">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Cotton Store">
   <meta property="og:title" content="Cotton Store | Ropa urbana en San Felipe">
   <meta property="og:description" content="Franelas, gorras, pantalones y accesorios. Catálogo completo, pedidos por WhatsApp y envíos a toda Venezuela.">
-  <meta property="og:url" content="https://cyt3rto0ls.github.io/">
-  <meta property="og:image" content="https://cyt3rto0ls.github.io/assets/img/og.jpg">
+  <meta property="og:url" content="https://cyt3rto0ls.github.io/cotton-store/">
+  <meta property="og:image" content="https://cyt3rto0ls.github.io/cotton-store/assets/img/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="es_VE">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Cotton Store | Ropa urbana en San Felipe">
   <meta name="twitter:description" content="Catálogo de ropa urbana. Pedidos por WhatsApp y envíos a toda Venezuela.">
-  <meta name="twitter:image" content="https://cyt3rto0ls.github.io/assets/img/og.jpg">
+  <meta name="twitter:image" content="https://cyt3rto0ls.github.io/cotton-store/assets/img/og.jpg">
 
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" href="assets/img/icon-32.png">
@@ -33,6 +33,15 @@
   <link rel="preload" as="image" href="assets/img/hero/img-1285.webp" fetchpriority="high">
   <link rel="stylesheet" href="assets/css/styles.css">
   <script>document.documentElement.classList.add('js');</script>
+  <script>
+    // Los enlaces antiguos del catálogo ahora viven en catalogo.html
+    (() => {
+      const q = window.location.search;
+      if (/[?&](p|cat|line|q|sort)=/.test(q)) {
+        window.location.replace("catalogo.html" + q + window.location.hash);
+      }
+    })();
+  </script>
 
   <script type="application/ld+json">
   {
@@ -40,9 +49,9 @@
     "@type": "ClothingStore",
     "name": "Cotton Store",
     "description": "Tienda de ropa urbana en San Felipe, Yaracuy. Franelas, gorras, pantalones, zapatos y accesorios con envíos a toda Venezuela.",
-    "url": "https://cyt3rto0ls.github.io/",
-    "image": "https://cyt3rto0ls.github.io/assets/img/og.jpg",
-    "logo": "https://cyt3rto0ls.github.io/assets/img/logo.png",
+    "url": "https://cyt3rto0ls.github.io/cotton-store/",
+    "image": "https://cyt3rto0ls.github.io/cotton-store/assets/img/og.jpg",
+    "logo": "https://cyt3rto0ls.github.io/cotton-store/assets/img/logo.png",
     "telephone": "+584120522641",
     "email": "Cottonstore75@gmail.com",
     "priceRange": "$",
@@ -138,7 +147,7 @@
 
       <nav class="nav-desktop" aria-label="Navegación principal">
         <a href="#categorias">Categorías</a>
-        <a href="#catalogo">Catálogo</a>
+        <a href="catalogo.html">Catálogo</a>
         <a href="#como-comprar">Cómo comprar</a>
         <a href="#nosotros">Nosotros</a>
         <a href="#contacto">Contacto</a>
@@ -168,7 +177,7 @@
     </div>
     <nav class="mobile-nav container" aria-label="Navegación móvil">
       <a href="#categorias"><span>01</span> Categorías</a>
-      <a href="#catalogo"><span>02</span> Catálogo</a>
+      <a href="catalogo.html"><span>02</span> Catálogo</a>
       <a href="#como-comprar"><span>03</span> Cómo comprar</a>
       <a href="#nosotros"><span>04</span> Nosotros</a>
       <a href="#contacto"><span>05</span> Contacto</a>
@@ -194,7 +203,7 @@
           <h1 id="heroTitle">ROPA<br>URBANA<br><span class="outline">SIN FILTROS</span></h1>
           <p class="hero-lead">Franelas, gorras, pantalones, zapatos y accesorios elegidos para que armes tu próximo fit. Catálogo completo, atención directa y envíos a toda Venezuela.</p>
           <div class="hero-actions">
-            <a class="btn btn-solid" href="#catalogo">
+            <a class="btn btn-solid" href="catalogo.html">
               Ver el catálogo
               <svg class="icon" aria-hidden="true"><use href="#i-down"/></svg>
             </a>
@@ -204,8 +213,8 @@
             </a>
           </div>
           <dl class="hero-stats">
-            <div><dt>Piezas</dt><dd data-stat-total>484</dd></div>
-            <div><dt>Categorías</dt><dd data-stat-cats>13</dd></div>
+            <div><dt>Drop</dt><dd>2026</dd></div>
+            <div><dt>Atención</dt><dd>Directa</dd></div>
             <div><dt>Envíos</dt><dd>Toda Venezuela</dd></div>
           </dl>
         </div>
@@ -256,7 +265,7 @@
         </div>
         <div class="section-head-side">
           <p>De la franela al sneaker. Todo el catálogo ordenado para que encuentres lo tuyo sin perder tiempo.</p>
-          <a class="link-arrow" href="#catalogo">Ver todo el catálogo <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="link-arrow" href="catalogo.html">Ver catálogo completo <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         </div>
       </div>
 
@@ -273,70 +282,19 @@
       </div>
     </section>
 
-    <section class="section catalog" id="catalogo" aria-labelledby="catalogTitle">
-      <div class="container">
-        <div class="section-head catalog-head">
-          <div>
-            <p class="eyebrow">02 — Catálogo 2026</p>
-            <h2 id="catalogTitle" class="section-title">TODO EL<br><span class="serif">catálogo</span></h2>
-          </div>
-          <div class="section-head-side">
-            <p>Toca una pieza para verla en grande y pedirla por WhatsApp. Precios en USD; tallas y disponibilidad se confirman al escribir.</p>
-            <p class="catalog-total"><span id="totalPieces">484</span> piezas disponibles</p>
-          </div>
-        </div>
-
-        <div class="toolbar" id="toolbar">
-          <div class="chips" id="categoryChips" role="group" aria-label="Filtrar por categoría"></div>
-          <div class="toolbar-row">
-            <label class="search">
-              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-              <input type="search" id="searchInput" placeholder="Busca por nombre, categoría o referencia" autocomplete="off" aria-label="Buscar en el catálogo">
-              <button type="button" class="search-clear" id="searchClear" aria-label="Limpiar búsqueda" hidden>
-                <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
-              </button>
-            </label>
-            <label class="select">
-              <span class="sr-only">Filtrar por línea</span>
-              <select id="lineSelect"><option value="">Todas las líneas</option></select>
-            </label>
-            <label class="select">
-              <span class="sr-only">Ordenar</span>
-              <select id="sortSelect">
-                <option value="default">Destacados</option>
-                <option value="price-asc">Precio: menor a mayor</option>
-                <option value="price-desc">Precio: mayor a menor</option>
-                <option value="az">Nombre A–Z</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div class="results-bar">
-          <p id="resultsCount" aria-live="polite">Cargando catálogo…</p>
-          <button class="results-reset" id="resetFilters" type="button" hidden>Limpiar filtros</button>
-        </div>
-
-        <div class="product-grid" id="productGrid" aria-busy="true"></div>
-
-        <div class="empty" id="emptyState" hidden>
-          <p class="empty-tag">0 resultados</p>
-          <h3>Esa pieza no está en el catálogo.</h3>
-          <p>Prueba con otra búsqueda o escríbenos por WhatsApp: puede que tengamos algo parecido o te lo consigamos.</p>
-          <a class="btn btn-dark" href="https://wa.me/584120522641?text=Hola%20Cotton%20Store%20%F0%9F%91%8B%20Busco%20una%20pieza%20que%20no%20veo%20en%20la%20web." target="_blank" rel="noopener">
-            <svg class="icon" aria-hidden="true"><use href="#i-wa"/></svg> Preguntar por WhatsApp
+    <section class="section catalog-cta" id="catalogo" aria-labelledby="catalogCtaTitle">
+      <div class="container catalog-cta-inner">
+        <p class="eyebrow eyebrow-light">02 — Catálogo</p>
+        <h2 id="catalogCtaTitle" class="section-title">EL CATÁLOGO<br><span class="serif">te espera.</span></h2>
+        <p class="catalog-cta-lead">Elige la categoría que buscas y ahí verás las piezas disponibles: fotos, referencias y precios. Sin ruido, sin llenarte de cosas que no te interesan.</p>
+        <div class="catalog-cta-actions">
+          <a class="btn btn-solid" href="catalogo.html">
+            Ver catálogo
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
           </a>
+          <a class="btn btn-outline-light" href="#categorias">Ver categorías</a>
         </div>
-
-        <div class="load-more" id="loadMoreWrap">
-          <button class="btn btn-outline" id="loadMore" type="button" hidden>Cargar más piezas</button>
-          <p class="load-more-note" id="loadMoreNote" hidden></p>
-          <div class="sentinel" id="sentinel" aria-hidden="true"></div>
-        </div>
-
-        <noscript>
-          <p class="noscript">Activa JavaScript para ver el catálogo completo. También puedes escribirnos por WhatsApp al +58 412-0522641.</p>
-        </noscript>
+        <p class="catalog-cta-note">Franelas · Gorras · Pantalones · Zapatos · Sueters · Bandoleros · Accesorios</p>
       </div>
     </section>
 
@@ -486,7 +444,7 @@
         <div>
           <p class="footer-title">Catálogo</p>
           <a href="#categorias">Categorías</a>
-          <a href="#catalogo">Todas las piezas</a>
+          <a href="catalogo.html">Ver catálogo</a>
           <a href="#como-comprar">Cómo comprar</a>
         </div>
         <div>
@@ -518,52 +476,7 @@
     <span class="wa-float-label">Pedir</span>
   </a>
 
-  <div class="modal" id="productModal" hidden>
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <button class="modal-close" id="modalClose" aria-label="Cerrar ficha">
-        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
-      </button>
 
-      <div class="modal-media">
-        <img id="modalImg" src="" alt="" width="1280" height="1600">
-        <button class="modal-nav modal-prev" id="modalPrev" aria-label="Pieza anterior">
-          <svg class="icon" aria-hidden="true"><use href="#i-left"/></svg>
-        </button>
-        <button class="modal-nav modal-next" id="modalNext" aria-label="Pieza siguiente">
-          <svg class="icon" aria-hidden="true"><use href="#i-right"/></svg>
-        </button>
-        <p class="modal-counter" id="modalCounter">01 / 01</p>
-      </div>
-
-      <div class="modal-info">
-        <p class="modal-cat" id="modalCat">Categoría</p>
-        <h2 id="modalTitle">Pieza</h2>
-        <p class="modal-ref">Ref. <span id="modalRef">—</span></p>
-        <p class="modal-price" id="modalPrice">Consultar precio</p>
-        <p class="modal-price-note" id="modalPriceNote" hidden></p>
-
-        <div class="modal-divider"></div>
-
-        <p class="modal-desc" id="modalDesc">Pieza seleccionada por Cotton Store.</p>
-        <p class="modal-avail"><span class="pulse-dot"></span> Tallas y disponibilidad se confirman por WhatsApp.</p>
-
-        <div class="modal-actions">
-          <a class="btn btn-dark btn-block" id="modalWa" href="#" target="_blank" rel="noopener">
-            <svg class="icon" aria-hidden="true"><use href="#i-wa"/></svg> Pedir esta pieza
-          </a>
-          <button class="btn btn-ghost btn-block" id="modalShare" type="button">
-            <svg class="icon" aria-hidden="true"><use href="#i-share"/></svg> Compartir pieza
-          </button>
-        </div>
-
-        <p class="modal-foot">Cotton Store · San Felipe, Yaracuy · Envíos a toda Venezuela</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script src="assets/js/app.js" defer></script>
+  <script src="assets/js/home.js" defer></script>
 </body>
 </html>
