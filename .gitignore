@@ -1,0 +1,12 @@
+# Credenciales y datos privados (NUNCA subir)
+Datos
+
+# Originales del catálogo (1.6 GB). La web usa los WebP de assets/
+Cotton Store Catalogo 2026🌐/
+
+# Caché de las herramientas
+tools/drive_manifest.json
+tools/failed.json
+__pycache__/
+*.pyc
+.DS_Store
