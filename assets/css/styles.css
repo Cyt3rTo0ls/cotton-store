@@ -1718,3 +1718,14 @@ a.contact-card:hover .contact-arrow { color: var(--white); }
   .catalog-cta-actions .btn { width: 100%; }
   .catalog-page { padding-top: 22px; }
 }
+
+/* Grilla de productos según el ancho */
+@media (min-width: 721px) {
+  .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1100px) {
+  .product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1500px) {
+  .product-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
