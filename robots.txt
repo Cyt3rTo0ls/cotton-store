@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /CottonStore/
 
 Sitemap: https://cyt3rto0ls.github.io/cotton-store/sitemap.xml
