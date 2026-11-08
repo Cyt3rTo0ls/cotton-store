@@ -483,7 +483,7 @@ def main() -> int:
             "facebook": "https://www.facebook.com/people/Cotton-Store/100085036136711/",
             "tiktok": "https://www.tiktok.com/@cottonstore.ven",
             "address": "87M5+WR5, Avenida 5 Libertador, San Felipe 3201, Yaracuy, Venezuela",
-            "maps": "https://maps.google.com/?q=87M5%2BWR5+Avenida+5+Libertador+San+Felipe+Yaracuy+Venezuela",
+            "maps": "https://www.google.com/maps/place/Cotton+Store/@10.3348621,-68.7410177,151m/data=!3m1!1e3!4m6!3m5!1s0x8e80cf004b71d91b:0x637231aa8956f571!8m2!3d10.3347413!4d-68.7404677!16s%2Fg%2F11z83v2gdg?entry=ttu&g_ep=EgoyMDI2MTEwMy4wIKXMDSoASAFQAw%3D%3D",
         },
         "total": len(items),
         "hero": hero,

@@ -75,10 +75,43 @@
 
   const waLink = (msg) => `https://wa.me/${WA}?text=${encodeURIComponent(msg)}`;
 
+  const productURL = (item) =>
+    `${location.origin}${location.pathname}?cat=${encodeURIComponent(item.category)}&p=${encodeURIComponent(item.ref)}`;
+
   const productMessage = (item) =>
     `Hola Cotton Store 👋 Me interesa ${item.name} (Ref. ${item.ref})` +
     (item.price ? ` — $${item.price}` : "") +
-    ". ¿Está disponible?";
+    `. ¿Está disponible?\n${productURL(item)}`;
+
+  // Intenta enviar la foto como archivo adjunto (móvil); si no se puede,
+  // abre WhatsApp con el mensaje y el enlace de la pieza (vista previa).
+  async function sendProductToWhatsApp(item) {
+    const text = productMessage(item);
+    const fallback = waLink(text);
+    const canShare = typeof navigator.share === "function" && typeof navigator.canShare === "function";
+
+    if (!canShare) {
+      window.open(fallback, "_blank", "noopener");
+      return;
+    }
+
+    try {
+      const res = await fetch(item.img);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const ext = (blob.type.split("/")[1] || "webp").replace("jpeg", "jpg");
+      const file = new File([blob], `${item.ref}.${ext}`, { type: blob.type || "image/webp" });
+
+      if (!navigator.canShare({ files: [file] })) {
+        location.href = fallback;
+        return;
+      }
+      await navigator.share({ files: [file], text, title: item.name });
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      location.href = fallback;
+    }
+  }
 
   const toastTimer = { id: 0 };
   function showToast(msg) {
@@ -621,6 +654,13 @@
     modalPrev.addEventListener("click", () => navigate(-1));
     modalNext.addEventListener("click", () => navigate(1));
     $("#modalShare").addEventListener("click", shareCurrent);
+
+    modalWa.addEventListener("click", (event) => {
+      const item = state.filtered[state.current];
+      if (!item) return;
+      event.preventDefault();
+      sendProductToWhatsApp(item);
+    });
 
     document.addEventListener("keydown", (event) => {
       if (state.modalOpen) {

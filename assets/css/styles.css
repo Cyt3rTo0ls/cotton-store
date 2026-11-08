@@ -1729,3 +1729,33 @@ a.contact-card:hover .contact-arrow { color: var(--white); }
 @media (min-width: 1500px) {
   .product-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+
+/* Mapa de ubicación */
+.map-wrap {
+  margin-top: clamp(18px, 2.5vw, 28px);
+  border: 1px solid var(--line);
+  background: var(--bone);
+}
+.map-wrap iframe {
+  display: block;
+  width: 100%;
+  height: clamp(260px, 36vw, 400px);
+  border: 0;
+  filter: grayscale(1) contrast(1.05);
+}
+.map-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.map-link span:last-child { display: inline-flex; align-items: center; gap: 8px; }
+.map-link .icon { width: 14px; height: 14px; color: var(--wa); }
+.map-link:hover { background: var(--ink); color: var(--white); }
