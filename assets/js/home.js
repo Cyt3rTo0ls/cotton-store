@@ -22,9 +22,7 @@
   async function loadCategories() {
     if (!rail) return;
     try {
-      const res = await fetch("assets/data/catalog.json", { cache: "no-cache" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await window.CS_DATA.load();
       const categories = data.categories || [];
 
       rail.innerHTML = categories

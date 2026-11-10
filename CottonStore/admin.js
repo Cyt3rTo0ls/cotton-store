@@ -17,6 +17,13 @@ const SITE = "https://cyt3rto0ls.github.io/cotton-store";
 const SHARE_PAGE_DIR = "p";
 const SHARE_IMG_DIR = "assets/img/share";
 const UPLOAD_CONCURRENCY = 5;
+// Supabase: catálogo y fotos se publican al instante (sin recompilar Pages)
+const SB_URL = "https://ggehmhtlruvszuqgqhvc.supabase.co";
+const SB_KEY = "sb_publishable_6GA6Olv0U_g6z1gkqv9YxA_X3Ei4cGu";
+const SB_BUCKET = "catalog";
+const SB_DOC = "main";
+const SB_EMAIL = "panel@cottonstore.local";
+const SB_SESSION_KEY = "cs_admin_sb_v1";
 
 const CAT_META = {
   franelas:   { prefix: "FR", order: 1,  singular: "Franela" },
@@ -38,6 +45,7 @@ const state = {
   data: null,
   headSha: "",
   sessionToken: "",
+  sb: null,
   query: "",
   catFilter: "",
   limit: 36,
@@ -198,6 +206,12 @@ function publicPath(path) {
   return `../${String(path).replace(/^\/+/, "")}`;
 }
 
+function pagePath(path) {
+  if (!path) return "";
+  if (/^(https?:|data:|blob:|\/)/.test(path)) return path;
+  return `../${String(path).replace(/^\/+/, "")}`;
+}
+
 function toast(message, isError = false) {
   el.toast.textContent = message;
   el.toast.classList.toggle("is-error", Boolean(isError));
@@ -206,7 +220,7 @@ function toast(message, isError = false) {
   state.toastTimer = window.setTimeout(() => el.toast.classList.remove("is-on"), 4600);
 }
 
-function setBusy(show, title = "Publicando…", text = "Guardando cambios en GitHub") {
+function setBusy(show, title = "Publicando…", text = "Guardando cambios") {
   el.busy.hidden = !show;
   if (show) {
     el.busyTitle.textContent = title;
@@ -314,6 +328,7 @@ async function handleLogin(event) {
   try {
     const token = await unlockPanel(user, password);
     setSessionToken(token);
+    await sbLogin(password);
     await openPanel();
     el.loginPass.value = "";
     el.loginError.hidden = true;
@@ -339,6 +354,7 @@ async function handleLogin(event) {
 function logout() {
   if (state.saving) return;
   setSessionToken("");
+  sbSaveSession(null);
   state.data = null;
   state.headSha = "";
   state.editing = null;
@@ -351,6 +367,11 @@ function logout() {
 
 function describeError(err) {
   if (!navigator.onLine) return "Sin conexión. Revisa tu internet e intenta de nuevo.";
+  if (err && err.supabase) {
+    if (err.status === 401 || err.status === 403) return "La sesión del panel caducó. Vuelve a entrar.";
+    if (err.status === 404) return "No se encontró el catálogo en Supabase.";
+    return err.message || "Supabase rechazó la operación.";
+  }
   if (err && err.status === 401) return "La sesión con GitHub no es válida. Vuelve a entrar.";
   if (err && err.status === 403) return "GitHub rechazó la operación. Puede ser el límite de peticiones o permisos del token.";
   if (err && err.status === 404) return "No se encontró el repositorio o el catálogo.";
@@ -397,22 +418,161 @@ async function api(path, options = {}) {
   return response.json();
 }
 
-async function loadCatalog() {
-  const ref = await api(`/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
-  const file = await api(
-    `/repos/${OWNER}/${REPO}/contents/${CATALOG_PATH}?ref=${encodeURIComponent(BRANCH)}&t=${Date.now()}`
-  );
-  let data;
+/* ---------------- Supabase (catálogo y fotos) ---------------- */
+
+function sbSaveSession(session) {
+  state.sb = session;
   try {
-    data = JSON.parse(decodeUtf8Base64(file.content || ""));
+    if (session) sessionStorage.setItem(SB_SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SB_SESSION_KEY);
   } catch {
-    throw new Error("El catálogo no se pudo leer. Revisa que catalog.json sea válido.");
+    /* sessionStorage bloqueado: la sesión vive solo en memoria */
   }
+}
+
+function sbStoredSession() {
+  try {
+    const raw = sessionStorage.getItem(SB_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function sbError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  err.supabase = true;
+  return err;
+}
+
+async function sbAuth(path, body) {
+  let response;
+  try {
+    response = await fetch(`${SB_URL}/auth/v1/${path}`, {
+      method: "POST",
+      headers: { apikey: SB_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    throw sbError(0, "No se pudo conectar con Supabase. Revisa tu conexión.");
+  }
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    /* sin cuerpo */
+  }
+  if (!response.ok) {
+    throw sbError(
+      response.status,
+      (data && (data.msg || data.error_description || data.message || data.error)) || "Supabase rechazó el acceso."
+    );
+  }
+  return data;
+}
+
+// Abre (o crea la primera vez) la sesión del panel en Supabase con la misma
+// clave del panel. La cuenta vive solo en este proyecto y sirve para escribir.
+async function sbLogin(password) {
+  const credentials = { email: SB_EMAIL, password: `cottonstore|${password}` };
+  let data = null;
+  try {
+    data = await sbAuth("token?grant_type=password", credentials);
+  } catch (err) {
+    if (err.status !== 400 && err.status !== 401) throw err;
+    try {
+      await sbAuth("signup", credentials);
+    } catch {
+      /* la cuenta ya existía */
+    }
+    data = await sbAuth("token?grant_type=password", credentials);
+  }
+  sbSaveSession({ access: data.access_token, refresh: data.refresh_token });
+}
+
+async function sbRefresh() {
+  const current = state.sb || sbStoredSession();
+  if (!current || !current.refresh) {
+    throw sbError(401, "La sesión del panel caducó. Vuelve a entrar.");
+  }
+  const data = await sbAuth("token?grant_type=refresh_token", { refresh_token: current.refresh });
+  sbSaveSession({ access: data.access_token, refresh: data.refresh_token });
+}
+
+async function sbRequest(path, options = {}, retried = false) {
+  const token = (state.sb && state.sb.access) || SB_KEY;
+  const headers = { apikey: SB_KEY, Authorization: `Bearer ${token}`, ...(options.headers || {}) };
+  if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  let response;
+  try {
+    response = await fetch(`${SB_URL}${path}`, { ...options, headers, cache: "no-store" });
+  } catch {
+    throw sbError(0, "No se pudo conectar con Supabase. Revisa tu conexión.");
+  }
+  if (response.status === 401 && !retried) {
+    await sbRefresh();
+    return sbRequest(path, options, true);
+  }
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.json();
+      detail = body && (body.message || body.error_description || body.error);
+    } catch {
+      /* respuesta sin JSON */
+    }
+    throw sbError(response.status, detail || `Supabase respondió ${response.status}.`);
+  }
+  if (response.status === 204) return null;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function storageUrl(path) {
+  return `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${path}`;
+}
+
+async function uploadPhoto(path, blob) {
+  await sbRequest(`/storage/v1/object/${SB_BUCKET}/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": blob.type || "application/octet-stream",
+      "x-upsert": "true"
+    },
+    body: blob
+  });
+  return storageUrl(path);
+}
+
+async function loadCatalog() {
+  const rows = await sbRequest(`/rest/v1/catalog_doc?id=eq.${SB_DOC}&select=data`);
+  const data = rows && rows[0] && rows[0].data;
   if (!data || !Array.isArray(data.items) || !Array.isArray(data.categories)) {
-    throw new Error("El catálogo tiene un formato inesperado.");
+    throw new Error("El catálogo no se pudo leer. Revisa la conexión y recarga.");
   }
   state.data = data;
-  state.headSha = ref.object.sha;
+}
+
+async function saveCatalogDoc(data) {
+  await sbRequest(`/rest/v1/catalog_doc?id=eq.${SB_DOC}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ data, updated_at: new Date().toISOString() })
+  });
+}
+
+// La página con Open Graph todavía vive en GitHub Pages: si falla, la pieza
+// igual queda publicada y solo se retrasa la vista previa de WhatsApp.
+async function publishShareFiles(entries, message) {
+  if (!entries.length) return true;
+  try {
+    await commitTree(entries, message);
+    return true;
+  } catch (err) {
+    console.warn("No se pudo actualizar la vista previa de WhatsApp:", err);
+    return false;
+  }
 }
 
 async function commitTree(entries, message) {
@@ -880,7 +1040,7 @@ h1{margin:0;font-size:24px;line-height:1.05;letter-spacing:-.03em;text-transform
 </head>
 <body>
 <main class="card">
-  <a class="media" href="${esc(localURL)}"><img src="../${esc(item.thumb || item.img || "")}" alt="${esc(item.alt || item.name)}" width="${Number(item.w) || 1280}" height="${Number(item.h) || 1600}"></a>
+  <a class="media" href="${esc(localURL)}"><img src="${esc(pagePath(item.thumb || item.img || ""))}" alt="${esc(item.alt || item.name)}" width="${Number(item.w) || 1280}" height="${Number(item.h) || 1600}"></a>
   <div class="info">
     <p class="kicker">${esc(kicker)}</p>
     <h1>${esc(item.name)}</h1>
@@ -1232,7 +1392,10 @@ async function saveBatch(event) {
     let done = 0;
 
     for (const row of rows) {
-      const paths = imagePaths(cat.slug, row.ref, row.ext, null);
+      if (el.bProgress) el.bProgress.textContent = `Subiendo foto ${done + 1} de ${rows.length}…`;
+      const paths = storagePaths(cat.slug, row.ref, row.ext);
+      const img = await uploadPhoto(paths.imgPath, row.full);
+      const thumb = await uploadPhoto(paths.thumbPath, row.thumb);
       const item = {
         ref: row.ref,
         name: row.name,
@@ -1241,8 +1404,8 @@ async function saveBatch(event) {
         line,
         price,
         priceNote: priceNote || null,
-        img: paths.img,
-        thumb: paths.thumb,
+        img,
+        thumb,
         order: catMeta(cat.slug).order,
         w: row.width,
         h: row.height,
@@ -1252,29 +1415,21 @@ async function saveBatch(event) {
 
       const slug = shareSlug(item.ref);
       const preview = await squareJpeg(row.thumb);
-      entries.push({ path: paths.img, encoding: "base64", content: await blobToBase64(row.full) });
-      entries.push({ path: paths.thumb, encoding: "base64", content: await blobToBase64(row.thumb) });
       entries.push({ path: `${SHARE_IMG_DIR}/${slug}.jpg`, encoding: "base64", content: await blobToBase64(preview) });
       entries.push({ path: `${SHARE_PAGE_DIR}/${slug}.html`, encoding: "utf-8", content: sharePageHTML(item) });
 
       done += 1;
-      if (el.bProgress) el.bProgress.textContent = `Preparando ${done} de ${rows.length}…`;
+      if (el.bProgress) el.bProgress.textContent = `Publicando ${done} de ${rows.length}…`;
     }
 
     recomputeCatalog(next);
-    entries.unshift({
-      path: CATALOG_PATH,
-      encoding: "utf-8",
-      content: JSON.stringify(next)
-    });
-    if (el.bProgress) el.bProgress.textContent = "Subiendo a GitHub…";
+    if (el.bProgress) el.bProgress.textContent = "Guardando el catálogo…";
+    await saveCatalogDoc(next);
+    state.data = next;
 
     const message = `Panel: agrega ${rows.length} pieza${rows.length === 1 ? "" : "s"}` +
       ` (${cat.label}${line ? ` · ${line}` : ""})`;
-    const commit = await commitTree(entries, message);
-
-    state.data = next;
-    state.headSha = commit.sha;
+    const previewSaved = await publishShareFiles(entries, message);
     renderStats();
     renderList();
     hydrateSelects();
@@ -1284,7 +1439,11 @@ async function saveBatch(event) {
     el.bPrice.value = rawPrice;
     el.bPriceNote.value = priceNote;
     updateBatchLineOptions();
-    toast(`${rows.length} pieza${rows.length === 1 ? "" : "s"} publicada${rows.length === 1 ? "" : "s"}. La web se actualiza en 1–2 min.`);
+    toast(
+      `${rows.length} pieza${rows.length === 1 ? "" : "s"} publicada${rows.length === 1 ? "" : "s"}.` +
+      " Ya aparece" + (rows.length === 1 ? "" : "n") + " en la web." +
+      (previewSaved ? "" : " La vista previa de WhatsApp se actualizará en breve.")
+    );
   } catch (err) {
     showBatchError(describeError(err));
   } finally {
@@ -1334,18 +1493,23 @@ function recomputeCatalog(data) {
   data.generated = new Date().toISOString().slice(0, 10);
 }
 
-function imagePaths(category, ref, ext, ignoreRef) {
+function storagePaths(category, ref, ext) {
   const stem = slugify(ref);
   let suffix = 1;
-  let image;
-  let thumb;
+  let name;
+  let path;
+  let thumbPath;
   do {
-    const name = suffix === 1 ? stem : `${stem}-${suffix}`;
-    image = `assets/img/catalog/${category}/${name}.${ext}`;
-    thumb = `assets/img/catalog/thumbs/${category}/${name}.${ext}`;
+    name = suffix === 1 ? stem : `${stem}-${suffix}`;
+    path = `catalog/${category}/${name}.${ext}`;
+    thumbPath = `thumbs/${category}/${name}.${ext}`;
     suffix += 1;
-  } while (state.data.items.some((item) => item.ref !== ignoreRef && (item.img === image || item.thumb === thumb)));
-  return { img: image, thumb };
+  } while (state.data.items.some((item) => {
+    const usedImg = String(item.img || "");
+    const usedThumb = String(item.thumb || "");
+    return usedImg.endsWith(`/${path}`) || usedThumb.endsWith(`/${thumbPath}`);
+  }));
+  return { imgPath: path, thumbPath };
 }
 
 function validateForm() {
@@ -1399,7 +1563,7 @@ async function saveProduct(event) {
   state.saving = true;
   el.saveBtn.disabled = true;
   el.saveBtnText.textContent = editingItem ? "Guardando cambios…" : "Subiendo pieza…";
-  setBusy(true, editingItem ? "Guardando cambios…" : "Subiendo producto…", "Creando el commit en GitHub");
+  setBusy(true, editingItem ? "Guardando cambios…" : "Subiendo producto…", "Subiendo la foto y guardando la pieza");
   try {
     const next = cloneCatalog();
     const entries = [];
@@ -1408,21 +1572,11 @@ async function saveProduct(event) {
     let width = editingItem ? editingItem.w : 0;
     let height = editingItem ? editingItem.h : 0;
     if (state.pendingPhoto) {
-      const paths = imagePaths(values.category, values.ref, state.pendingPhoto.ext, editingItem ? editingItem.ref : null);
-      img = paths.img;
-      thumb = paths.thumb;
+      const paths = storagePaths(values.category, values.ref, state.pendingPhoto.ext);
+      img = await uploadPhoto(paths.imgPath, state.pendingPhoto.full);
+      thumb = await uploadPhoto(paths.thumbPath, state.pendingPhoto.thumb);
       width = state.pendingPhoto.width;
       height = state.pendingPhoto.height;
-      entries.push({
-        path: paths.img,
-        encoding: "base64",
-        content: bytesToBase64(new Uint8Array(await state.pendingPhoto.full.arrayBuffer()))
-      });
-      entries.push({
-        path: paths.thumb,
-        encoding: "base64",
-        content: bytesToBase64(new Uint8Array(await state.pendingPhoto.thumb.arrayBuffer()))
-      });
     }
     if (!img || !thumb) throw new Error("La pieza necesita una foto. Vuelve a cargarla.");
 
@@ -1484,19 +1638,18 @@ async function saveProduct(event) {
     }
 
     recomputeCatalog(next);
-    entries.unshift({
-      path: CATALOG_PATH,
-      encoding: "utf-8",
-      content: JSON.stringify(next)
-    });
-    const commit = await commitTree(entries, message);
+    await saveCatalogDoc(next);
     state.data = next;
-    state.headSha = commit.sha;
+    const previewSaved = await publishShareFiles(entries, message);
     renderStats();
     renderList();
     hydrateSelects();
     resetEditor(values.category, values.line);
-    toast(editingItem ? "Cambios publicados. La web se actualiza en 1–2 min." : "Producto subido. La web se actualiza en 1–2 min.");
+    toast(
+      (editingItem ? "Cambios publicados." : "Producto publicado.") +
+      " Ya aparece en la web." +
+      (previewSaved ? "" : " La vista previa de WhatsApp se actualizará en breve.")
+    );
   } catch (err) {
     showFormError(describeError(err));
     if (err.status === 401) {
@@ -1544,30 +1697,26 @@ async function confirmDelete() {
   }
   state.saving = true;
   el.deleteConfirm.disabled = true;
-  setBusy(true, "Eliminando pieza…", "Creando el commit en GitHub");
+  setBusy(true, "Eliminando pieza…", "Guardando el cambio");
   try {
     const next = cloneCatalog();
     next.items = next.items.filter((entry) => entry.ref !== item.ref);
     recomputeCatalog(next);
     const slug = shareSlug(item.ref);
-    const commit = await commitTree([{
-      path: CATALOG_PATH,
-      encoding: "utf-8",
-      content: JSON.stringify(next)
-    }, {
+    await saveCatalogDoc(next);
+    state.data = next;
+    await publishShareFiles([{
       path: `${SHARE_PAGE_DIR}/${slug}.html`,
       remove: true
     }, {
       path: `${SHARE_IMG_DIR}/${slug}.jpg`,
       remove: true
     }], `Panel: elimina ${item.name} (${item.ref})`);
-    state.data = next;
-    state.headSha = commit.sha;
     closeDelete();
     if (state.editing === item.ref) resetEditor();
     renderStats();
     renderList();
-    toast("Pieza eliminada del catálogo. La web se actualiza en 1–2 min.");
+    toast("Pieza eliminada. Ya no aparece en la web.");
   } catch (err) {
     closeDelete();
     toast(describeError(err), true);
@@ -1581,9 +1730,13 @@ async function confirmDelete() {
 /* ---------------- apertura y eventos ---------------- */
 
 async function openPanel() {
-  setBusy(true, "Abriendo catálogo…", "Leyendo datos desde GitHub");
+  setBusy(true, "Abriendo catálogo…", "Leyendo el catálogo desde Supabase");
   try {
-    await api(`/repos/${OWNER}/${REPO}`);
+    try {
+      await api(`/repos/${OWNER}/${REPO}`);
+    } catch (err) {
+      console.warn("GitHub no respondió; la vista previa de WhatsApp puede fallar.", err);
+    }
     await loadCatalog();
     hydratePanel();
     el.loginView.hidden = true;
@@ -1597,7 +1750,7 @@ async function openPanel() {
 async function refreshCatalog() {
   if (state.saving) return;
   if ((state.editing || state.pendingPhoto) && !window.confirm("Hay cambios sin publicar. ¿Recargar y perderlos?")) return;
-  setBusy(true, "Actualizando catálogo…", "Leyendo datos desde GitHub");
+  setBusy(true, "Actualizando catálogo…", "Leyendo el catálogo desde Supabase");
   try {
     await loadCatalog();
     hydratePanel();
@@ -1818,17 +1971,26 @@ async function boot() {
     return;
   }
   const stored = getStoredToken();
-  if (!stored) {
-    el.loginUser.focus();
+  const sbStored = sbStoredSession();
+  if (!stored || !sbStored) {
+    if (stored) showLogin("Vuelve a entrar para publicar.");
+    else el.loginUser.focus();
     return;
   }
   state.sessionToken = stored;
+  state.sb = sbStored;
   try {
     await openPanel();
   } catch (err) {
-    setSessionToken("");
-    state.sessionToken = "";
-    showLogin(describeError(err));
+    try {
+      await sbRefresh();
+      await openPanel();
+    } catch {
+      sbSaveSession(null);
+      setSessionToken("");
+      state.sessionToken = "";
+      showLogin(describeError(err));
+    }
   }
 }
 

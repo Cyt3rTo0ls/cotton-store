@@ -112,9 +112,7 @@
   async function loadCatalog() {
     const deepRef = new URLSearchParams(window.location.search).get("p");
     try {
-      const res = await fetch("assets/data/catalog.json", { cache: "no-cache" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await window.CS_DATA.load();
       state.items = data.items || [];
       state.categories = data.categories || [];
 

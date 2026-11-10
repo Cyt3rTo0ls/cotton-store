@@ -353,10 +353,32 @@ El panel (`CottonStore/`) tiene dos pestañas en el editor: **Una pieza** y
 2. Arrastrar o seleccionar todas las fotos a la vez.
 3. Revisar nombre y referencia generados (editables) y publicar.
 
-Todo el grupo va en **un solo commit**: imágenes grandes, miniaturas, vista
-previa JPEG, página de la pieza y `catalog.json`. Los blobs se suben en paralelo
-(5 a la vez) para que el panel no tarde de más, y las fotos se optimizan en el
-navegador antes de subir.
+Las fotos se optimizan en el navegador (WebP grande + miniatura), se suben al
+bucket de Supabase y el catálogo se guarda al instante: no hay que esperar la
+recompilación de GitHub Pages. Lo único que todavía se commitea es la vista
+previa de WhatsApp (`p/<ref>.html` + `assets/img/share/<ref>.jpg`), porque
+WhatsApp necesita HTML estático para mostrarla.
+
+### Base de datos (Supabase, plan gratis sin tarjeta)
+
+- Proyecto `CottonStore` (Postgres 17), URL `https://ggehmhtlruvszuqgqhvc.supabase.co`.
+- Una sola tabla `public.catalog_doc (id text primary key, data jsonb, updated_at)`
+  con la fila `main`: la misma forma que tenía `catalog.json`, así que el panel y
+  la web no cambiaron su modelo de datos.
+- Bucket público `catalog` en Storage para fotos y miniaturas nuevas. Las 487
+  piezas anteriores siguen apuntando a `assets/img/...` del repositorio.
+- RLS: lectura pública; escritura solo para la cuenta `panel@cottonstore.local`.
+  El panel usa la `publishable key` (pública, de lectura) y crea esa cuenta en el
+  primer inicio de sesión con la misma clave del login; la `service_role` nunca
+  llega al navegador.
+- `assets/js/catalog-data.js` centraliza la lectura: Supabase → copia en
+  `localStorage` → `assets/data/catalog.json`. `home.js` y `catalogo.js` solo
+  llaman a `window.CS_DATA.load()`.
+- La CSP del panel (`CottonStore/index.html`) permite `connect-src` e `img-src`
+  hacia el dominio del proyecto; si algún día se cambia de proyecto, hay que
+  actualizarla junto con las constantes `SB_*` de `admin.js` y `catalog-data.js`.
+- Plan gratis: 500 MB de base, 1 GB de Storage; el proyecto se pausa tras ~1
+  semana sin actividad y el tráfico normal de la web lo mantiene despierto.
 
 ## 10. Verificación hecha
 
@@ -374,6 +396,20 @@ navegador antes de subir.
   de los drivers del entorno (no por errores de la web). Las pruebas de DOM y de
   lógica de datos sí pasaron.
 
+### Prueba de Supabase (CDP, contra el proyecto real)
+
+- Login del panel con la clave del panel → sesión de Supabase OK (y creación de la
+  cuenta en el primer intento).
+- Catálogo leído de Supabase: 487 piezas, 13 categorías.
+- Escritura anónima bloqueada por RLS (la fila queda intacta).
+- Foto subida al bucket y accesible por su URL pública.
+- Pieza de prueba guardada → visible al instante por REST, sin commit ni espera de
+  Pages; luego borrada y catálogo devuelto a 487.
+- Web pública: `catalogo.html?cat=franelas` lee Supabase y renderiza (24 tarjetas
+  iniciales, 168 tras hacer scroll), inicio con 13 categorías, 0 errores de consola.
+- El usuario de prueba de Auth y el objeto de Storage se borraron al terminar, así
+  que el primer login real crea la cuenta con la clave del usuario.
+
 ---
 
 ## 11. Seguridad y pendientes
@@ -381,6 +417,11 @@ navegador antes de subir.
 **Importante:** el token de GitHub se compartió en texto plano y quedó en `Datos`.
 Está en `.gitignore`, pero **debe rotarse** en GitHub → Settings → Developer settings →
 Personal access tokens. Después de rotarlo, actualizar el remoto si se usa con token.
+
+La `publishable key` de Supabase sí es pública (va en el JS de la web y solo lee).
+La `service_role`, la contraseña de la base y el token de gestión no están en el
+repo ni en el código: se usaron solo desde la terminal para crear la tabla, las
+políticas y el bucket.
 
 Pendientes sugeridos (no implementados):
 

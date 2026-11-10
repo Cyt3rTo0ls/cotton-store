@@ -8,8 +8,17 @@ Sitio estático del catálogo de **Cotton Store**, tienda de ropa urbana en San 
 
 ## Stack
 
-HTML + CSS + JavaScript vanilla. Sin frameworks, sin build step, sin backend.
-Los datos viven en `assets/data/catalog.json` y las imágenes en `assets/img/catalog/`.
+HTML + CSS + JavaScript vanilla. Sin frameworks ni build step. Sigue publicado en
+GitHub Pages, pero el catálogo ya no se sirve desde el repositorio: vive en
+**Supabase** (Postgres + Storage, plan gratis) y la web lo lee por REST. Así, al
+publicar una pieza desde el panel aparece **al instante**, sin esperar la
+recompilación de Pages.
+
+- Tabla `catalog_doc` (una fila, `id = main`, columna `data jsonb`): el catálogo completo.
+- Bucket público `catalog` de Storage: fotos y miniaturas nuevas.
+- Las piezas antiguas conservan sus rutas `assets/img/...` dentro del repo (~169 MB).
+- `assets/data/catalog.json` se mantiene como respaldo: `assets/js/catalog-data.js`
+  usa primero Supabase, luego una copia en `localStorage` y al final ese JSON.
 
 ## Estructura
 
@@ -20,6 +29,7 @@ Los datos viven en `assets/data/catalog.json` y las imágenes en `assets/img/cat
 ├── 404.html                    # Página de error
 ├── assets/
 │   ├── css/styles.css          # Sistema visual completo
+│   ├── js/catalog-data.js      # Lee el catálogo de Supabase (respaldo: caché y JSON)
 │   ├── js/home.js              # Inicio: categorías y menú
 │   ├── js/catalogo.js          # Catálogo: selector, filtros, ficha, WhatsApp
 │   ├── data/catalog.json       # Datos del catálogo
@@ -81,6 +91,10 @@ git push
 
 GitHub Pages reconstruye solo en ~1 minuto.
 
+> **Ojo:** la web lee de Supabase, no de `assets/data/catalog.json`. Si cambiaste
+> fotos por el flujo del Drive, publica desde el panel o vuelve a sembrar el JSON
+> (ver “Base de datos” abajo); si no, esos cambios no se verán.
+
 ### Precios y nombres de línea
 
 Se editan en `tools/build_assets.py`:
@@ -90,6 +104,42 @@ Se editan en `tools/build_assets.py`:
 - `CATEGORIES`: orden, prefijo de referencia y descripción de cada categoría.
 
 Después de cambiarlos, vuelve a correr `build_assets.py`.
+
+## Base de datos (Supabase)
+
+Proyecto `CottonStore` — `https://ggehmhtlruvszuqgqhvc.supabase.co`.
+
+| Pieza | Dónde |
+|---|---|
+| Catálogo (487 piezas) | tabla `public.catalog_doc`, fila `main`, columna `data` |
+| Fotos nuevas | bucket público `catalog` (`catalog/<categoría>/<archivo>.webp`, `thumbs/...`) |
+| Escritura del panel | Supabase Auth, cuenta `panel@cottonstore.local` con la clave del panel |
+
+Seguridad: la web usa solo la clave `publishable` (lectura pública). El panel
+inicia sesión con la clave que ya pide el login y RLS solo deja escribir a esa
+cuenta; la clave `service_role` **nunca** se envía al navegador. Las páginas
+`p/<ref>.html` y `assets/img/share/` sí siguen en GitHub porque WhatsApp
+necesita HTML estático para la vista previa; el panel las commitea aparte y, si
+falla, la pieza igual queda publicada.
+
+Volver a sembrar el catálogo desde el JSON del repo:
+
+```bash
+. /tmp/sb.env   # SBP, REF, URL, PUB
+python3 - <<'PY'
+import json, urllib.request
+svc = json.load(open('/tmp/sb-keys.json'))
+key = [k for k in svc if k['name'] == 'service_role'][0]['api_key']
+body = json.dumps([{'id': 'main', 'data': json.load(open('assets/data/catalog.json'))}]).encode()
+req = urllib.request.Request('https://ggehmhtlruvszuqgqhvc.supabase.co/rest/v1/catalog_doc',
+    data=body, method='POST', headers={'apikey': key, 'Authorization': f'Bearer {key}',
+    'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal'})
+print(urllib.request.urlopen(req).status)
+PY
+```
+
+Plan gratis: 500 MB de base y 1 GB de Storage; el proyecto se pausa tras ~1
+semana sin actividad (el tráfico normal de la web lo evita).
 
 ## Publicación
 
@@ -104,8 +154,10 @@ Pages está configurado desde la rama `main`, carpeta `/`.
 
 En `CottonStore/` vive el panel para publicar sin usar la terminal. Tiene dos
 modos de carga: **Una pieza** y **Varias por grupo** (elige categoría/línea,
-suelta varias fotos y publícalas juntas en un solo commit). También genera la
-página de cada pieza y su vista previa para WhatsApp.
+suelta varias fotos y publícalas juntas). La primera vez que entres se crea la
+cuenta de Supabase del panel con la clave que ya usas; después todo se publica
+al instante, incluidas las fotos. También genera la página de cada pieza y su
+vista previa para WhatsApp.
 
 ## Notas
 
