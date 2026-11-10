@@ -1514,7 +1514,13 @@ function recomputeCatalog(data) {
       const pb = oldPositions.has(b.label) ? oldPositions.get(b.label) : 999;
       return pa - pb || a.label.localeCompare(b.label, "es");
     });
-    if (catItems[0]) cat.coverFull = catItems[0].img;
+    if (catItems[0]) {
+      cat.coverFull = catItems[0].img;
+      cat.cover = catItems[0].img;
+    } else if (!cat.cover) {
+      cat.cover = "assets/img/logo.webp";
+      cat.coverFull = null;
+    }
   }
   data.categories.sort((a, b) => {
     const oa = Number(a.order) || (CAT_META[a.slug] && CAT_META[a.slug].order) || 99;

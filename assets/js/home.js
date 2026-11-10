@@ -29,7 +29,7 @@
         .map(
           (cat, i) => `
         <a class="cat-card" href="catalogo.html?cat=${encodeURIComponent(cat.slug)}" aria-label="Ver la categoría ${esc(cat.label)}">
-          <img src="${cat.cover}" alt="" loading="lazy" decoding="async" width="600" height="750">
+          <img src="${cat.coverFull || cat.cover || 'assets/img/logo.webp'}" alt="" loading="lazy" decoding="async" width="600" height="750">
           <span class="cat-index">${pad(i + 1)}</span>
           <div class="cat-body">
             <div>
