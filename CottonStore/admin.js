@@ -1783,7 +1783,9 @@ function renderCatList() {
   const cats = categoryList();
   el.catList.innerHTML = cats.map((c) => {
     const count = state.data.items.filter((item) => item.category === c.slug).length;
-    const canDelete = count === 0;
+    const title = count > 0
+      ? `Eliminar categoría y sus ${count} pieza${count === 1 ? "" : "s"}`
+      : "Eliminar categoría vacía";
     return `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.08);">
         <div style="min-width:0;">
@@ -1792,7 +1794,7 @@ function renderCatList() {
             ${esc(c.slug)} · ${count} pieza${count === 1 ? "" : "s"} · prefijo ${esc(catMeta(c.slug).prefix)}
           </small>
         </div>
-        <button class="text-btn" type="button" data-cat-delete="${esc(c.slug)}" ${canDelete ? "" : "disabled"} title="${canDelete ? "Eliminar categoría" : "Tiene piezas: elimínalas o muévelas primero"}">Eliminar</button>
+        <button class="text-btn" type="button" data-cat-delete="${esc(c.slug)}" title="${esc(title)}">Eliminar</button>
       </div>`;
   }).join("");
   el.catList.querySelectorAll("[data-cat-delete]").forEach((btn) => {
@@ -1883,25 +1885,39 @@ async function deleteCategory(slug) {
   if (state.saving || !state.data) return;
   const cat = state.data.categories.find((c) => c.slug === slug);
   if (!cat) return;
-  const count = state.data.items.filter((item) => item.category === slug).length;
-  if (count > 0) {
-    toast("No puedes eliminar una categoría con piezas. Elimínalas o muévelas primero.", true);
-    return;
-  }
-  if (!window.confirm(`¿Eliminar la categoría “${cat.label}”?`)) return;
+  const items = state.data.items.filter((item) => item.category === slug);
+  const count = items.length;
+  const message = count > 0
+    ? `¿Eliminar la categoría “${cat.label}” y sus ${count} pieza${count === 1 ? "" : "s"}? Esta acción no se puede deshacer.`
+    : `¿Eliminar la categoría “${cat.label}”?`;
+  if (!window.confirm(message)) return;
 
   state.saving = true;
   setBusy(true, "Eliminando categoría…", "Guardando el catálogo");
   try {
     const next = cloneCatalog();
+    const removedItems = next.items.filter((item) => item.category === slug);
+    next.items = next.items.filter((item) => item.category !== slug);
     next.categories = next.categories.filter((c) => c.slug !== slug);
     recomputeCatalog(next);
     await saveCatalogDoc(next);
     state.data = next;
+
+    // Vista previa de WhatsApp: elimina las páginas de las piezas borradas.
+    const shareEntries = [];
+    for (const item of removedItems) {
+      const s = shareSlug(item.ref);
+      shareEntries.push({ path: `${SHARE_PAGE_DIR}/${s}.html`, remove: true });
+      shareEntries.push({ path: `${SHARE_IMG_DIR}/${s}.jpg`, remove: true });
+    }
+    if (shareEntries.length) {
+      await publishShareFiles(shareEntries, `Panel: elimina categoría ${cat.label} (${removedItems.length} piezas)`);
+    }
+
     hydrateSelects();
     renderStats();
     renderCatList();
-    toast("Categoría eliminada.");
+    toast(`Categoría eliminada${removedItems.length ? ` con ${removedItems.length} pieza${removedItems.length === 1 ? "" : "s"}` : ""}.`);
   } catch (err) {
     toast(describeError(err), true);
   } finally {
