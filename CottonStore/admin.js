@@ -134,7 +134,17 @@ const el = {
   busy: $("busy"),
   busyTitle: $("busyTitle"),
   busyText: $("busyText"),
-  toast: $("toast")
+  toast: $("toast"),
+  categoriesBtn: $("categoriesBtn"),
+  catOverlay: $("catOverlay"),
+  catList: $("catList"),
+  catForm: $("catForm"),
+  catLabel: $("catLabel"),
+  catSingular: $("catSingular"),
+  catPrefix: $("catPrefix"),
+  catBlurb: $("catBlurb"),
+  catError: $("catError"),
+  catClose: $("catClose")
 };
 
 /* ---------------- utilidades ---------------- */
@@ -197,7 +207,18 @@ function slugify(value) {
 }
 
 function catMeta(slug) {
-  return CAT_META[slug] || { prefix: String(slug || "XX").slice(0, 2).toUpperCase(), order: 99, singular: "Pieza" };
+  const cat = state.data && Array.isArray(state.data.categories)
+    ? state.data.categories.find((c) => c.slug === slug)
+    : null;
+  if (cat && (cat.prefix || cat.order || cat.singular)) {
+    return {
+      prefix: cat.prefix || String(slug || "XX").slice(0, 2).toUpperCase(),
+      order: Number(cat.order) || 99,
+      singular: cat.singular || cat.label || "Pieza"
+    };
+  }
+  if (CAT_META[slug]) return CAT_META[slug];
+  return { prefix: String(slug || "XX").slice(0, 2).toUpperCase(), order: 99, singular: "Pieza" };
 }
 
 function publicPath(path) {
@@ -1495,6 +1516,11 @@ function recomputeCatalog(data) {
     });
     if (catItems[0]) cat.coverFull = catItems[0].img;
   }
+  data.categories.sort((a, b) => {
+    const oa = Number(a.order) || (CAT_META[a.slug] && CAT_META[a.slug].order) || 99;
+    const ob = Number(b.order) || (CAT_META[b.slug] && CAT_META[b.slug].order) || 99;
+    return oa - ob || String(a.label || "").localeCompare(String(b.label || ""), "es");
+  });
   data.generated = new Date().toISOString().slice(0, 10);
 }
 
@@ -1732,6 +1758,158 @@ async function confirmDelete() {
   }
 }
 
+/* ---------------- gestión de categorías ---------------- */
+
+function showCatError(message) {
+  if (!el.catError) return;
+  el.catError.textContent = message;
+  el.catError.hidden = false;
+}
+
+function slugifyCategory(label) {
+  const base = normalize(label).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "categoria";
+  let slug = base;
+  let n = 2;
+  const existing = new Set((state.data && state.data.categories || []).map((c) => c.slug));
+  while (existing.has(slug)) {
+    slug = `${base}-${n}`;
+    n += 1;
+  }
+  return slug;
+}
+
+function renderCatList() {
+  if (!el.catList || !state.data) return;
+  const cats = categoryList();
+  el.catList.innerHTML = cats.map((c) => {
+    const count = state.data.items.filter((item) => item.category === c.slug).length;
+    const canDelete = count === 0;
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.08);">
+        <div style="min-width:0;">
+          <strong style="display:block;">${esc(c.label)}</strong>
+          <small style="display:block;color:#6b6560;font-size:11px;">
+            ${esc(c.slug)} · ${count} pieza${count === 1 ? "" : "s"} · prefijo ${esc(catMeta(c.slug).prefix)}
+          </small>
+        </div>
+        <button class="text-btn" type="button" data-cat-delete="${esc(c.slug)}" ${canDelete ? "" : "disabled"} title="${canDelete ? "Eliminar categoría" : "Tiene piezas: elimínalas o muévelas primero"}">Eliminar</button>
+      </div>`;
+  }).join("");
+  el.catList.querySelectorAll("[data-cat-delete]").forEach((btn) => {
+    btn.addEventListener("click", () => deleteCategory(btn.dataset.catDelete));
+  });
+}
+
+function openCatManager() {
+  if (!state.data) return;
+  renderCatList();
+  if (el.catForm) el.catForm.reset();
+  if (el.catError) el.catError.hidden = true;
+  if (el.catPrefix) {
+    delete el.catPrefix.dataset.touched;
+    el.catPrefix.value = "";
+  }
+  if (el.catOverlay) {
+    el.catOverlay.hidden = false;
+    document.body.classList.add("is-locked");
+  }
+}
+
+function closeCatManager() {
+  if (el.catOverlay) {
+    el.catOverlay.hidden = true;
+    document.body.classList.remove("is-locked");
+  }
+}
+
+async function addCategory(event) {
+  event.preventDefault();
+  if (state.saving || !state.data) return;
+  if (el.catError) el.catError.hidden = true;
+
+  const label = (el.catLabel && el.catLabel.value || "").trim();
+  if (!label) {
+    showCatError("Escribe el nombre de la categoría.");
+    return;
+  }
+  const singular = (el.catSingular && el.catSingular.value || "").trim() || label;
+  let prefix = (el.catPrefix && el.catPrefix.value || "").trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  if (!prefix) prefix = normalize(label).replace(/[^a-z]/g, "").slice(0, 2).toUpperCase() || "XX";
+  const blurb = (el.catBlurb && el.catBlurb.value || "").trim() || `${label} seleccionados por Cotton Store.`;
+  const slug = slugifyCategory(label);
+  if (state.data.categories.some((c) => c.slug === slug)) {
+    showCatError("Ya existe una categoría con ese nombre.");
+    return;
+  }
+
+  state.saving = true;
+  setBusy(true, "Agregando categoría…", "Guardando el catálogo");
+  try {
+    const next = cloneCatalog();
+    const order = next.categories.reduce((max, c) => {
+      const o = Number(c.order) || (CAT_META[c.slug] && CAT_META[c.slug].order) || 0;
+      return Math.max(max, o);
+    }, 0) + 1;
+    next.categories.push({
+      slug,
+      label,
+      singular,
+      blurb,
+      prefix,
+      order,
+      count: 0,
+      cover: "assets/img/logo.webp",
+      coverFull: null,
+      lines: []
+    });
+    recomputeCatalog(next);
+    await saveCatalogDoc(next);
+    state.data = next;
+    hydrateSelects();
+    renderStats();
+    renderCatList();
+    if (el.catForm) el.catForm.reset();
+    if (el.catPrefix) delete el.catPrefix.dataset.touched;
+    toast("Categoría agregada. Ya aparece en la web.");
+  } catch (err) {
+    showCatError(describeError(err));
+  } finally {
+    state.saving = false;
+    setBusy(false);
+  }
+}
+
+async function deleteCategory(slug) {
+  if (state.saving || !state.data) return;
+  const cat = state.data.categories.find((c) => c.slug === slug);
+  if (!cat) return;
+  const count = state.data.items.filter((item) => item.category === slug).length;
+  if (count > 0) {
+    toast("No puedes eliminar una categoría con piezas. Elimínalas o muévelas primero.", true);
+    return;
+  }
+  if (!window.confirm(`¿Eliminar la categoría “${cat.label}”?`)) return;
+
+  state.saving = true;
+  setBusy(true, "Eliminando categoría…", "Guardando el catálogo");
+  try {
+    const next = cloneCatalog();
+    next.categories = next.categories.filter((c) => c.slug !== slug);
+    recomputeCatalog(next);
+    await saveCatalogDoc(next);
+    state.data = next;
+    hydrateSelects();
+    renderStats();
+    renderCatList();
+    toast("Categoría eliminada.");
+  } catch (err) {
+    toast(describeError(err), true);
+  } finally {
+    state.saving = false;
+    setBusy(false);
+  }
+}
+
 /* ---------------- apertura y eventos ---------------- */
 
 async function openPanel() {
@@ -1948,6 +2126,31 @@ function bindEvents() {
         ? Array.from(event.dataTransfer.files)
         : [];
       addBatchFiles(files);
+    });
+  }
+
+  if (el.categoriesBtn) el.categoriesBtn.addEventListener("click", openCatManager);
+  if (el.catForm) el.catForm.addEventListener("submit", addCategory);
+  if (el.catClose) el.catClose.addEventListener("click", closeCatManager);
+  if (el.catOverlay) {
+    el.catOverlay.addEventListener("click", (event) => {
+      if (event.target === el.catOverlay && !state.saving) closeCatManager();
+    });
+  }
+  if (el.catLabel) {
+    el.catLabel.addEventListener("input", () => {
+      if (el.catPrefix && !el.catPrefix.dataset.touched) {
+        el.catPrefix.value = normalize(el.catLabel.value).replace(/[^a-z]/g, "").slice(0, 2).toUpperCase();
+      }
+    });
+  }
+  if (el.catPrefix) {
+    el.catPrefix.addEventListener("input", () => {
+      if (el.catPrefix.value.trim() === "") delete el.catPrefix.dataset.touched;
+      else el.catPrefix.dataset.touched = "1";
+    });
+    el.catPrefix.addEventListener("focus", () => {
+      try { el.catPrefix.select(); } catch { /* ignore */ }
     });
   }
 
