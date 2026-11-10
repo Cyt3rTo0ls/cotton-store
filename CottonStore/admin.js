@@ -566,13 +566,18 @@ async function saveCatalogDoc(data) {
 // igual queda publicada y solo se retrasa la vista previa de WhatsApp.
 async function publishShareFiles(entries, message) {
   if (!entries.length) return true;
-  try {
-    await commitTree(entries, message);
-    return true;
-  } catch (err) {
-    console.warn("No se pudo actualizar la vista previa de WhatsApp:", err);
-    return false;
+  // Reintenta unas veces: el commit de vista previa es best-effort y no debe
+  // dejar la pieza sin publicar, pero sí intentamos crearla al instante.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await commitTree(entries, message);
+      return true;
+    } catch (err) {
+      console.warn(`Vista previa (intento ${attempt + 1}/3):`, err);
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+    }
   }
+  return false;
 }
 
 async function commitTree(entries, message) {
