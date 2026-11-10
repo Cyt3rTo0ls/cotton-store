@@ -498,6 +498,11 @@ def main() -> int:
     build_logo()
     build_og()
 
+    # Páginas de compartir + miniaturas cuadradas para la vista previa de WhatsApp
+    from build_share import build_share_pages
+
+    build_share_pages()
+
     print(f"OK  {len(items)} productos  |  {len(categories)} categorías")
     print(f"    faltantes/errores: {stats['missing']}")
     print(f"    JSON: {(DATA_OUT / 'catalog.json').stat().st_size / 1024:.0f} KB")

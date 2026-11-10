@@ -12,6 +12,11 @@ const BRANCH = "main";
 const CATALOG_PATH = "assets/data/catalog.json";
 const API_BASE = "https://api.github.com";
 const SESSION_KEY = "cs_admin_token_v1";
+// Páginas de compartir (vista previa con la foto en WhatsApp)
+const SITE = "https://cyt3rto0ls.github.io/cotton-store";
+const SHARE_PAGE_DIR = "p";
+const SHARE_IMG_DIR = "assets/img/share";
+const UPLOAD_CONCURRENCY = 5;
 
 const CAT_META = {
   franelas:   { prefix: "FR", order: 1,  singular: "Franela" },
@@ -40,6 +45,9 @@ const state = {
   pendingPhoto: null,
   photoBusy: false,
   saving: false,
+  mode: "single",
+  batch: [],
+  batchSeq: 0,
   deleteRef: null,
   toastTimer: 0
 };
@@ -91,6 +99,25 @@ const el = {
   formError: $("formError"),
   saveBtn: $("saveBtn"),
   saveBtnText: $("saveBtnText"),
+  tabSingle: $("tabSingle"),
+  tabBatch: $("tabBatch"),
+  singlePane: $("singlePane"),
+  batchPane: $("batchPane"),
+  batchForm: $("batchForm"),
+  bCategory: $("bCategory"),
+  bLine: $("bLine"),
+  batchLineOptions: $("batchLineOptions"),
+  bPrice: $("bPrice"),
+  bPriceNote: $("bPriceNote"),
+  bDropZone: $("bDropZone"),
+  bPhotoInput: $("bPhotoInput"),
+  bCount: $("bCount"),
+  bClear: $("bClear"),
+  bList: $("bList"),
+  bError: $("bError"),
+  bSaveBtn: $("bSaveBtn"),
+  bSaveText: $("bSaveText"),
+  bProgress: $("bProgress"),
   deleteOverlay: $("deleteOverlay"),
   deleteTitle: $("deleteTitle"),
   deleteText: $("deleteText"),
@@ -396,22 +423,31 @@ async function commitTree(entries, message) {
     throw err;
   }
   const baseCommit = await api(`/repos/${OWNER}/${REPO}/git/commits/${ref.object.sha}`);
-  const treeEntries = [];
-  for (const entry of entries) {
-    const blob = await api(`/repos/${OWNER}/${REPO}/git/blobs`, {
+  // Los blobs se suben en paralelo: un grupo de fotos tarda mucho menos.
+  const uploads = entries.filter((entry) => !entry.remove);
+  const blobs = await mapPool(uploads, UPLOAD_CONCURRENCY, (entry) =>
+    api(`/repos/${OWNER}/${REPO}/git/blobs`, {
       method: "POST",
       body: JSON.stringify({
         content: entry.content,
         encoding: entry.encoding || "utf-8"
       })
-    });
-    treeEntries.push({
+    })
+  );
+  let blobIndex = 0;
+  const treeEntries = entries.map((entry) => {
+    if (entry.remove) {
+      return { path: entry.path, mode: "100644", type: "blob", sha: null };
+    }
+    const blob = blobs[blobIndex];
+    blobIndex += 1;
+    return {
       path: entry.path,
       mode: "100644",
       type: "blob",
       sha: blob.sha
-    });
-  }
+    };
+  });
   const tree = await api(`/repos/${OWNER}/${REPO}/git/trees`, {
     method: "POST",
     body: JSON.stringify({ base_tree: baseCommit.tree.sha, tree: treeEntries })
@@ -454,12 +490,19 @@ function hydrateSelects() {
   const cats = categoryList();
   const previousFilter = el.filterCat.value;
   const previousCategory = el.pCategory.value;
-  el.filterCat.innerHTML = `<option value="">Todas las categorías</option>` +
-    cats.map((c) => `<option value="${esc(c.slug)}">${esc(c.label)}</option>`).join("");
-  el.pCategory.innerHTML = cats.map((c) => `<option value="${esc(c.slug)}">${esc(c.label)}</option>`).join("");
+  const previousBatch = el.bCategory ? el.bCategory.value : "";
+  const options = cats.map((c) => `<option value="${esc(c.slug)}">${esc(c.label)}</option>`).join("");
+  el.filterCat.innerHTML = `<option value="">Todas las categorías</option>` + options;
+  el.pCategory.innerHTML = options;
+  if (el.bCategory) el.bCategory.innerHTML = options;
   if (cats.some((c) => c.slug === previousFilter)) el.filterCat.value = previousFilter;
   if (cats.some((c) => c.slug === previousCategory)) el.pCategory.value = previousCategory;
   else if (cats[0]) el.pCategory.value = cats[0].slug;
+  if (el.bCategory) {
+    if (cats.some((c) => c.slug === previousBatch)) el.bCategory.value = previousBatch;
+    else if (cats[0]) el.bCategory.value = cats[0].slug;
+    updateBatchLineOptions();
+  }
 }
 
 function hydratePanel() {
@@ -752,6 +795,506 @@ async function handlePhoto(file) {
   }
 }
 
+/* ---------------- compartir: vista previa con la foto ---------------- */
+
+function shareSlug(ref) {
+  return normalize(ref).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "pieza";
+}
+
+function priceLabel(price) {
+  if (price === null || price === undefined || price === "") return "Precio por WhatsApp";
+  const value = Number(price);
+  if (!Number.isFinite(value)) return "Precio por WhatsApp";
+  return `$${Number.isInteger(value) ? value : value.toFixed(2)} USD`;
+}
+
+function shareDescription(item) {
+  const where = item.line
+    ? `${item.categoryLabel} · Línea ${item.line}`
+    : item.categoryLabel;
+  return `${priceLabel(item.price)} · ${where} · Ref. ${item.ref}. Pídelo por WhatsApp. Envíos a toda Venezuela.`;
+}
+
+function waMessage(item) {
+  return `Hola Cotton Store 👋 Me interesa ${item.name} (Ref. ${item.ref})` +
+    (item.price || item.price === 0 ? ` — $${item.price}` : "") +
+    ". ¿Está disponible?";
+}
+
+// Misma estructura que tools/build_share.py: WhatsApp lee estos metadatos.
+function sharePageHTML(item) {
+  const slug = shareSlug(item.ref);
+  const pageURL = `${SITE}/p/${slug}.html`;
+  const imageURL = `${SITE}/assets/img/share/${slug}.jpg`;
+  const catalogURL = `${SITE}/catalogo.html?cat=${encodeURIComponent(item.category)}&p=${encodeURIComponent(item.ref)}`;
+  const localURL = `../catalogo.html?cat=${encodeURIComponent(item.category)}&p=${encodeURIComponent(item.ref)}`;
+  const desc = shareDescription(item);
+  const phone = (state.data && state.data.store && state.data.store.whatsapp) || "584120522641";
+  const waHref = `https://wa.me/${phone}?text=${encodeURIComponent(waMessage(item))}`;
+  const kicker = item.line ? `${item.categoryLabel} · ${item.line}` : item.categoryLabel;
+  const note = item.priceNote ? `<p class="note">${esc(item.priceNote)}</p>` : "";
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(item.name)} | Cotton Store</title>
+<meta name="description" content="${esc(desc)}">
+<meta name="robots" content="noindex,follow">
+<link rel="canonical" href="${esc(catalogURL)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cotton Store">
+<meta property="og:title" content="${esc(item.name)} — Cotton Store">
+<meta property="og:description" content="${esc(desc)}">
+<meta property="og:url" content="${esc(pageURL)}">
+<meta property="og:image" content="${esc(imageURL)}">
+<meta property="og:image:secure_url" content="${esc(imageURL)}">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="600">
+<meta property="og:image:height" content="600">
+<meta property="og:image:alt" content="${esc(item.alt || item.name)}">
+<meta property="og:locale" content="es_VE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(item.name)} — Cotton Store">
+<meta name="twitter:description" content="${esc(desc)}">
+<meta name="twitter:image" content="${esc(imageURL)}">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="../favicon.ico">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0a0a0a;color:#f4f1ea;font-family:"Helvetica Neue",Arial,sans-serif;-webkit-text-size-adjust:100%}
+.card{width:100%;max-width:420px;background:#111;border:1px solid #262626}
+.media{display:block;background:#000}
+.media img{display:block;width:100%;height:auto}
+.info{padding:20px}
+.kicker{margin:0 0 8px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#8b857a}
+h1{margin:0;font-size:24px;line-height:1.05;letter-spacing:-.03em;text-transform:uppercase}
+.ref{margin:6px 0 0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8b857a}
+.price{margin:14px 0 0;font-size:25px;font-weight:800;letter-spacing:-.03em}
+.note{margin:6px 0 0;font-size:11px;color:#8b857a}
+.btn{display:block;margin-top:18px;padding:14px;background:#f4f1ea;color:#0a0a0a;text-align:center;text-decoration:none;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.link{display:block;margin-top:10px;padding:12px;border:1px solid #333;color:#f4f1ea;text-align:center;text-decoration:none;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.foot{margin:18px 0 0;padding-top:14px;border-top:1px solid #242424;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#6f6a61}
+</style>
+</head>
+<body>
+<main class="card">
+  <a class="media" href="${esc(localURL)}"><img src="../${esc(item.thumb || item.img || "")}" alt="${esc(item.alt || item.name)}" width="${Number(item.w) || 1280}" height="${Number(item.h) || 1600}"></a>
+  <div class="info">
+    <p class="kicker">${esc(kicker)}</p>
+    <h1>${esc(item.name)}</h1>
+    <p class="ref">Ref. ${esc(item.ref)}</p>
+    <p class="price">${esc(priceLabel(item.price))}</p>
+    ${note}
+    <a class="btn" href="${esc(waHref)}" rel="noopener">Pedir por WhatsApp</a>
+    <a class="link" href="${esc(localURL)}">Ver en el catálogo</a>
+    <p class="foot">Cotton Store · San Felipe, Yaracuy · Envíos a toda Venezuela</p>
+  </div>
+</main>
+</body>
+</html>
+`;
+}
+
+// Miniatura cuadrada JPEG (WhatsApp no previsualiza WebP de forma fiable).
+async function squareJpeg(blob) {
+  const source = await decodeImage(blob);
+  const size = sourceSize(source);
+  const side = Math.min(size.width, size.height);
+  if (!side) throw new Error("La imagen no tiene dimensiones válidas.");
+  const canvas = document.createElement("canvas");
+  canvas.width = 600;
+  canvas.height = 600;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, 600, 600);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(
+    source,
+    Math.round((size.width - side) / 2),
+    Math.round((size.height - side) / 2),
+    side,
+    side,
+    0,
+    0,
+    600,
+    600
+  );
+  if (typeof source.close === "function") source.close();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (result) resolve(result);
+      else reject(new Error("No se pudo preparar la vista previa de la pieza."));
+    }, "image/jpeg", 0.76);
+  });
+}
+
+async function blobToBase64(blob) {
+  return bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
+}
+
+async function mapPool(list, limit, worker) {
+  const results = new Array(list.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.max(1, Math.min(limit, list.length)) }, async () => {
+    while (cursor < list.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(list[index], index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+/* ---------------- carga por grupo ---------------- */
+
+function batchCategory() {
+  if (!state.data) return null;
+  return state.data.categories.find((category) => category.slug === el.bCategory.value) || null;
+}
+
+function showBatchError(message) {
+  el.bError.textContent = message;
+  el.bError.hidden = false;
+  el.bError.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function setMode(mode) {
+  state.mode = mode === "batch" ? "batch" : "single";
+  const isBatch = state.mode === "batch";
+  if (el.tabSingle) {
+    el.tabSingle.classList.toggle("is-active", !isBatch);
+    el.tabSingle.setAttribute("aria-selected", String(!isBatch));
+  }
+  if (el.tabBatch) {
+    el.tabBatch.classList.toggle("is-active", isBatch);
+    el.tabBatch.setAttribute("aria-selected", String(isBatch));
+  }
+  if (el.singlePane) el.singlePane.hidden = isBatch;
+  if (el.batchPane) el.batchPane.hidden = !isBatch;
+  if (isBatch) updateBatchControls();
+}
+
+function updateBatchLineOptions() {
+  if (!state.data || !el.batchLineOptions) return;
+  const category = el.bCategory.value;
+  const labels = new Set();
+  for (const item of state.data.items) {
+    if (item.category === category && item.line) labels.add(item.line);
+  }
+  const cat = state.data.categories.find((c) => c.slug === category);
+  if (cat && Array.isArray(cat.lines)) {
+    for (const line of cat.lines) if (line && line.label) labels.add(line.label);
+  }
+  el.batchLineOptions.innerHTML = [...labels]
+    .sort((a, b) => a.localeCompare(b, "es"))
+    .map((label) => `<option value="${esc(label)}"></option>`)
+    .join("");
+}
+
+function batchStateText(row) {
+  if (row.error) return row.error;
+  if (row.status === "working") return "Optimizando…";
+  if (row.status === "ready" && row.full) return `Listo · ${formatBytes(row.full.size)}`;
+  return "En espera";
+}
+
+function updateBatchRow(row) {
+  if (!el.bList) return;
+  const li = el.bList.querySelector(`[data-id="${row.id}"]`);
+  if (!li) return;
+  li.classList.toggle("is-error", Boolean(row.error));
+  const status = li.querySelector(".batch-state");
+  if (status) status.textContent = batchStateText(row);
+  const img = li.querySelector(".batch-thumb");
+  if (img && row.previewUrl && img.getAttribute("src") !== row.previewUrl) {
+    img.src = row.previewUrl;
+  }
+}
+
+function renderBatchList() {
+  if (!el.bList) return;
+  const blank = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+  el.bList.innerHTML = state.batch
+    .map(
+      (row) => `
+      <li class="batch-item${row.error ? " is-error" : ""}" data-id="${row.id}">
+        <img class="batch-thumb" src="${row.previewUrl || blank}" alt="" width="44" height="54">
+        <div class="batch-fields">
+          <input class="batch-name" data-field="name" value="${esc(row.name)}" maxlength="80" placeholder="Nombre de la pieza" aria-label="Nombre de la pieza">
+          <input class="batch-ref" data-field="ref" value="${esc(row.ref)}" maxlength="28" placeholder="Referencia" aria-label="Referencia de la pieza">
+          <span class="batch-state">${esc(batchStateText(row))}</span>
+        </div>
+        <button class="batch-remove" type="button" data-action="remove" aria-label="Quitar esta foto">×</button>
+      </li>`
+    )
+    .join("");
+}
+
+function syncBatchNames() {
+  updateBatchControls();
+  if (!state.data || !state.batch.length) {
+    renderBatchList();
+    return;
+  }
+  const cat = batchCategory();
+  if (!cat) return;
+  const line = el.bLine.value.trim();
+  const code = lineCode(line);
+  const prefix = `${catMeta(cat.slug).prefix}-${code ? `${code}-` : ""}`;
+
+  const used = new Set();
+  for (const item of state.data.items) {
+    if (!item.ref || !item.ref.startsWith(prefix)) continue;
+    const tail = item.ref.slice(prefix.length);
+    if (/^\d+$/.test(tail)) used.add(Number(tail));
+  }
+  for (const row of state.batch) {
+    if (!row.refTouched || !row.ref || !row.ref.startsWith(prefix)) continue;
+    const tail = row.ref.slice(prefix.length);
+    if (/^\d+$/.test(tail)) used.add(Number(tail));
+  }
+
+  let next = 1;
+  for (const row of state.batch) {
+    if (!row.refTouched) {
+      while (used.has(next)) next += 1;
+      row.ref = `${prefix}${String(next).padStart(2, "0")}`;
+      used.add(next);
+    }
+    if (!row.nameTouched) {
+      const number = Number(String(row.ref || "").slice(prefix.length));
+      const parts = [cat.singular || cat.label];
+      if (line) parts.push(line);
+      if (Number.isFinite(number) && number > 0) parts.push(String(number).padStart(2, "0"));
+      row.name = parts.join(" ");
+    }
+  }
+  renderBatchList();
+}
+
+function updateBatchControls() {
+  const total = state.batch.length;
+  const ready = state.batch.filter((row) => row.status === "ready").length;
+  const busy = state.batch.some((row) => row.status === "working");
+  if (el.bCount) {
+    el.bCount.textContent = total === 0
+      ? "0 piezas en el grupo"
+      : `${total} pieza${total === 1 ? "" : "s"} · ${ready} lista${ready === 1 ? "" : "s"}`;
+  }
+  if (el.bClear) el.bClear.hidden = total === 0;
+  if (el.bSaveBtn) {
+    el.bSaveBtn.disabled = state.saving || total === 0 || busy || ready !== total;
+  }
+  if (el.bSaveText) {
+    el.bSaveText.textContent = total === 0
+      ? "Publicar grupo"
+      : `Publicar ${total} pieza${total === 1 ? "" : "s"}`;
+  }
+}
+
+function clearBatch() {
+  for (const row of state.batch) {
+    if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+  }
+  state.batch = [];
+  renderBatchList();
+  updateBatchControls();
+}
+
+async function processBatchRow(row) {
+  row.status = "working";
+  updateBatchRow(row);
+  let source = null;
+  try {
+    source = await decodeImage(row.file);
+    const full = await renderImage(source, 1280, 1600, 0.8);
+    const thumb = await renderImage(source, 600, 760, 0.74);
+    row.full = full.blob;
+    row.thumb = thumb.blob;
+    row.ext = full.ext;
+    row.thumbExt = thumb.ext;
+    row.width = full.width;
+    row.height = full.height;
+    if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+    row.previewUrl = URL.createObjectURL(full.blob);
+    row.status = "ready";
+    row.error = "";
+  } catch (err) {
+    row.status = "error";
+    row.error = err && err.message ? err.message : "No se pudo procesar la foto.";
+  } finally {
+    if (source && typeof source.close === "function") source.close();
+    row.file = null;
+    updateBatchRow(row);
+    updateBatchControls();
+  }
+}
+
+async function addBatchFiles(files) {
+  if (!state.data) return;
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  if (!batchCategory()) {
+    showBatchError("Elige la categoría del grupo antes de subir las fotos.");
+    return;
+  }
+  const accepted = list.filter(
+    (file) => file.type && file.type.startsWith("image/") && file.size <= 25 * 1024 * 1024
+  );
+  if (!accepted.length) {
+    showBatchError("Esas fotos no son válidas. Usa JPG, PNG, WebP o HEIC de menos de 25 MB.");
+    return;
+  }
+  if (accepted.length < list.length) {
+    toast(`${list.length - accepted.length} archivo(s) no se agregaron por formato o tamaño.`, true);
+  }
+  el.bError.hidden = true;
+  const rows = accepted.map((file) => {
+    state.batchSeq += 1;
+    return {
+      id: `b${state.batchSeq}`,
+      file,
+      name: "",
+      ref: "",
+      nameTouched: false,
+      refTouched: false,
+      status: "waiting",
+      previewUrl: "",
+      full: null,
+      thumb: null,
+      ext: "",
+      thumbExt: "",
+      width: 0,
+      height: 0,
+      error: ""
+    };
+  });
+  state.batch.push(...rows);
+  syncBatchNames();
+  updateBatchControls();
+  await mapPool(rows, 3, processBatchRow);
+  updateBatchControls();
+}
+
+async function saveBatch(event) {
+  event.preventDefault();
+  if (state.saving || !state.data) return;
+  el.bError.hidden = true;
+
+  const cat = batchCategory();
+  if (!cat) return showBatchError("Elige la categoría del grupo.");
+  if (!state.batch.length) return showBatchError("Agrega al menos una foto.");
+  if (state.batch.some((row) => row.status === "working")) {
+    return showBatchError("Espera a que las fotos terminen de optimizarse.");
+  }
+  if (state.batch.some((row) => row.status !== "ready")) {
+    return showBatchError("Hay fotos con error. Quítalas o vuelve a subirlas.");
+  }
+
+  const line = el.bLine.value.trim();
+  const priceNote = el.bPriceNote.value.trim();
+  const rawPrice = el.bPrice.value.trim();
+  let price = null;
+  if (rawPrice !== "") {
+    price = Number(rawPrice);
+    if (!Number.isFinite(price) || price < 0) {
+      return showBatchError("Escribe un precio válido, sin símbolos.");
+    }
+    price = Math.round(price * 100) / 100;
+  }
+
+  const seen = new Set();
+  for (const row of state.batch) {
+    row.name = row.name.trim();
+    row.ref = String(row.ref || "").trim().toUpperCase();
+    if (!row.name) return showBatchError("Cada pieza necesita un nombre.");
+    if (!/^[A-Z0-9-]{2,28}$/.test(row.ref)) {
+      return showBatchError(`Revisa la referencia “${row.ref}”: solo letras, números y guiones (2 a 28).`);
+    }
+    if (seen.has(row.ref)) return showBatchError(`La referencia ${row.ref} está repetida en el grupo.`);
+    seen.add(row.ref);
+    if (state.data.items.some((item) => item.ref.toLowerCase() === row.ref.toLowerCase())) {
+      return showBatchError(`La referencia ${row.ref} ya existe en el catálogo.`);
+    }
+  }
+
+  state.saving = true;
+  updateBatchControls();
+  setBusy(true, `Publicando ${state.batch.length} pieza${state.batch.length === 1 ? "" : "s"}…`, "Preparando fotos y vistas previas");
+  try {
+    const next = cloneCatalog();
+    const entries = [];
+    const rows = [...state.batch];
+    let done = 0;
+
+    for (const row of rows) {
+      const paths = imagePaths(cat.slug, row.ref, row.ext, null);
+      const item = {
+        ref: row.ref,
+        name: row.name,
+        category: cat.slug,
+        categoryLabel: cat.label,
+        line,
+        price,
+        priceNote: priceNote || null,
+        img: paths.img,
+        thumb: paths.thumb,
+        order: catMeta(cat.slug).order,
+        w: row.width,
+        h: row.height,
+        alt: `${row.name} — ${cat.label} de Cotton Store`
+      };
+      next.items.push(item);
+
+      const slug = shareSlug(item.ref);
+      const preview = await squareJpeg(row.thumb);
+      entries.push({ path: paths.img, encoding: "base64", content: await blobToBase64(row.full) });
+      entries.push({ path: paths.thumb, encoding: "base64", content: await blobToBase64(row.thumb) });
+      entries.push({ path: `${SHARE_IMG_DIR}/${slug}.jpg`, encoding: "base64", content: await blobToBase64(preview) });
+      entries.push({ path: `${SHARE_PAGE_DIR}/${slug}.html`, encoding: "utf-8", content: sharePageHTML(item) });
+
+      done += 1;
+      if (el.bProgress) el.bProgress.textContent = `Preparando ${done} de ${rows.length}…`;
+    }
+
+    recomputeCatalog(next);
+    entries.unshift({
+      path: CATALOG_PATH,
+      encoding: "utf-8",
+      content: JSON.stringify(next)
+    });
+    if (el.bProgress) el.bProgress.textContent = "Subiendo a GitHub…";
+
+    const message = `Panel: agrega ${rows.length} pieza${rows.length === 1 ? "" : "s"}` +
+      ` (${cat.label}${line ? ` · ${line}` : ""})`;
+    const commit = await commitTree(entries, message);
+
+    state.data = next;
+    state.headSha = commit.sha;
+    renderStats();
+    renderList();
+    hydrateSelects();
+    clearBatch();
+    el.bCategory.value = cat.slug;
+    el.bLine.value = line;
+    el.bPrice.value = rawPrice;
+    el.bPriceNote.value = priceNote;
+    updateBatchLineOptions();
+    toast(`${rows.length} pieza${rows.length === 1 ? "" : "s"} publicada${rows.length === 1 ? "" : "s"}. La web se actualiza en 1–2 min.`);
+  } catch (err) {
+    showBatchError(describeError(err));
+  } finally {
+    state.saving = false;
+    updateBatchControls();
+    setBusy(false);
+    if (el.bProgress) el.bProgress.textContent = "Todo el grupo se publica en un solo commit.";
+  }
+}
+
 /* ---------------- mutaciones del catálogo ---------------- */
 
 function cloneCatalog() {
@@ -908,6 +1451,38 @@ async function saveProduct(event) {
       next.items.push(item);
       message = `Panel: agrega ${item.name} (${item.ref})`;
     }
+
+    // Vista previa para WhatsApp: miniatura JPEG + página con Open Graph
+    const slug = shareSlug(item.ref);
+    let preview = null;
+    if (state.pendingPhoto) {
+      preview = await squareJpeg(state.pendingPhoto.thumb);
+    } else {
+      try {
+        const res = await fetch(publicPath(item.thumb));
+        if (res.ok) preview = await squareJpeg(await res.blob());
+      } catch {
+        preview = null;
+      }
+    }
+    if (preview) {
+      entries.push({
+        path: `${SHARE_IMG_DIR}/${slug}.jpg`,
+        encoding: "base64",
+        content: await blobToBase64(preview)
+      });
+    }
+    entries.push({
+      path: `${SHARE_PAGE_DIR}/${slug}.html`,
+      encoding: "utf-8",
+      content: sharePageHTML(item)
+    });
+    if (editingItem && editingItem.ref !== item.ref) {
+      const oldSlug = shareSlug(editingItem.ref);
+      entries.push({ path: `${SHARE_PAGE_DIR}/${oldSlug}.html`, remove: true });
+      entries.push({ path: `${SHARE_IMG_DIR}/${oldSlug}.jpg`, remove: true });
+    }
+
     recomputeCatalog(next);
     entries.unshift({
       path: CATALOG_PATH,
@@ -974,10 +1549,17 @@ async function confirmDelete() {
     const next = cloneCatalog();
     next.items = next.items.filter((entry) => entry.ref !== item.ref);
     recomputeCatalog(next);
+    const slug = shareSlug(item.ref);
     const commit = await commitTree([{
       path: CATALOG_PATH,
       encoding: "utf-8",
       content: JSON.stringify(next)
+    }, {
+      path: `${SHARE_PAGE_DIR}/${slug}.html`,
+      remove: true
+    }, {
+      path: `${SHARE_IMG_DIR}/${slug}.jpg`,
+      remove: true
     }], `Panel: elimina ${item.name} (${item.ref})`);
     state.data = next;
     state.headSha = commit.sha;
@@ -1124,6 +1706,92 @@ function bindEvents() {
     const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
     if (file) handlePhoto(file);
   });
+
+  // ----- carga por grupo -----
+  if (el.tabSingle) el.tabSingle.addEventListener("click", () => setMode("single"));
+  if (el.tabBatch) el.tabBatch.addEventListener("click", () => setMode("batch"));
+  if (el.batchForm) el.batchForm.addEventListener("submit", saveBatch);
+  if (el.bCategory) {
+    el.bCategory.addEventListener("change", () => {
+      updateBatchLineOptions();
+      syncBatchNames();
+    });
+  }
+  if (el.bLine) {
+    el.bLine.addEventListener("input", () => {
+      if (!state.batch.some((row) => row.refTouched)) syncBatchNames();
+    });
+    el.bLine.addEventListener("change", syncBatchNames);
+  }
+  if (el.bPrice) el.bPrice.addEventListener("input", () => { el.bError.hidden = true; });
+  if (el.bPriceNote) el.bPriceNote.addEventListener("input", () => { el.bError.hidden = true; });
+  if (el.bClear) el.bClear.addEventListener("click", clearBatch);
+
+  if (el.bList) {
+    el.bList.addEventListener("input", (event) => {
+      const li = event.target.closest(".batch-item");
+      if (!li) return;
+      const row = state.batch.find((entry) => entry.id === li.dataset.id);
+      if (!row) return;
+      if (event.target.dataset.field === "name") {
+        row.name = event.target.value;
+        row.nameTouched = true;
+      } else if (event.target.dataset.field === "ref") {
+        row.ref = event.target.value.toUpperCase();
+        event.target.value = row.ref;
+        row.refTouched = true;
+      }
+      el.bError.hidden = true;
+    });
+    el.bList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action='remove']");
+      if (!button) return;
+      const li = button.closest(".batch-item");
+      const index = state.batch.findIndex((entry) => entry.id === (li && li.dataset.id));
+      if (index < 0) return;
+      const row = state.batch[index];
+      if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+      state.batch.splice(index, 1);
+      renderBatchList();
+      updateBatchControls();
+    });
+  }
+
+  if (el.bDropZone && el.bPhotoInput) {
+    el.bDropZone.setAttribute("role", "button");
+    el.bDropZone.setAttribute("tabindex", "0");
+    el.bDropZone.setAttribute("aria-label", "Subir varias fotos del grupo");
+    el.bDropZone.addEventListener("click", () => el.bPhotoInput.click());
+    el.bDropZone.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        el.bPhotoInput.click();
+      }
+    });
+    el.bPhotoInput.addEventListener("change", () => {
+      const files = el.bPhotoInput.files ? Array.from(el.bPhotoInput.files) : [];
+      el.bPhotoInput.value = "";
+      addBatchFiles(files);
+    });
+    ["dragenter", "dragover"].forEach((name) => {
+      el.bDropZone.addEventListener(name, (event) => {
+        event.preventDefault();
+        el.bDropZone.classList.add("is-drag");
+      });
+    });
+    ["dragleave", "drop"].forEach((name) => {
+      el.bDropZone.addEventListener(name, (event) => {
+        event.preventDefault();
+        el.bDropZone.classList.remove("is-drag");
+      });
+    });
+    el.bDropZone.addEventListener("drop", (event) => {
+      const files = event.dataTransfer && event.dataTransfer.files
+        ? Array.from(event.dataTransfer.files)
+        : [];
+      addBatchFiles(files);
+    });
+  }
 
   el.deleteCancel.addEventListener("click", closeDelete);
   el.deleteConfirm.addEventListener("click", confirmDelete);

@@ -75,43 +75,18 @@
 
   const waLink = (msg) => `https://wa.me/${WA}?text=${encodeURIComponent(msg)}`;
 
-  const productURL = (item) =>
-    `${location.origin}${location.pathname}?cat=${encodeURIComponent(item.category)}&p=${encodeURIComponent(item.ref)}`;
+  // Página propia de la pieza: lleva los metadatos Open Graph con su foto,
+  // así WhatsApp muestra la vista previa del producto en el chat.
+  // (Se genera al publicar cada pieza, desde el panel o con tools/build_share.py)
+  const SITE = "https://cyt3rto0ls.github.io/cotton-store";
+  const shareSlug = (ref) =>
+    norm(ref).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "pieza";
+  const shareURL = (item) => `${SITE}/p/${shareSlug(item.ref)}.html`;
 
   const productMessage = (item) =>
     `Hola Cotton Store 👋 Me interesa ${item.name} (Ref. ${item.ref})` +
     (item.price ? ` — $${item.price}` : "") +
-    `. ¿Está disponible?\n${productURL(item)}`;
-
-  // Intenta enviar la foto como archivo adjunto (móvil); si no se puede,
-  // abre WhatsApp con el mensaje y el enlace de la pieza (vista previa).
-  async function sendProductToWhatsApp(item) {
-    const text = productMessage(item);
-    const fallback = waLink(text);
-    const canShare = typeof navigator.share === "function" && typeof navigator.canShare === "function";
-
-    if (!canShare) {
-      window.open(fallback, "_blank", "noopener");
-      return;
-    }
-
-    try {
-      const res = await fetch(item.img);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const ext = (blob.type.split("/")[1] || "webp").replace("jpeg", "jpg");
-      const file = new File([blob], `${item.ref}.${ext}`, { type: blob.type || "image/webp" });
-
-      if (!navigator.canShare({ files: [file] })) {
-        location.href = fallback;
-        return;
-      }
-      await navigator.share({ files: [file], text, title: item.name });
-    } catch (err) {
-      if (err && err.name === "AbortError") return;
-      location.href = fallback;
-    }
-  }
+    `. ¿Está disponible?\n${shareURL(item)}`;
 
   const toastTimer = { id: 0 };
   function showToast(msg) {
@@ -548,7 +523,7 @@
   async function shareCurrent() {
     const item = state.filtered[state.current];
     if (!item) return;
-    const url = `${location.origin}${location.pathname}?cat=${encodeURIComponent(item.category)}&p=${encodeURIComponent(item.ref)}`;
+    const url = shareURL(item);
     const data = {
       title: `${item.name} — Cotton Store`,
       text: `${item.name} (${item.ref}) en Cotton Store.`,
@@ -654,13 +629,6 @@
     modalPrev.addEventListener("click", () => navigate(-1));
     modalNext.addEventListener("click", () => navigate(1));
     $("#modalShare").addEventListener("click", shareCurrent);
-
-    modalWa.addEventListener("click", (event) => {
-      const item = state.filtered[state.current];
-      if (!item) return;
-      event.preventDefault();
-      sendProductToWhatsApp(item);
-    });
 
     document.addEventListener("keydown", (event) => {
       if (state.modalOpen) {

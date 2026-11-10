@@ -134,6 +134,12 @@
             <button class="text-btn" id="cancelEdit" type="button" hidden>Cancelar</button>
           </div>
 
+          <div class="editor-tabs" role="tablist" aria-label="Modo de carga">
+            <button class="editor-tab is-active" id="tabSingle" type="button" role="tab" aria-selected="true" aria-controls="singlePane">Una pieza</button>
+            <button class="editor-tab" id="tabBatch" type="button" role="tab" aria-selected="false" aria-controls="batchPane">Varias por grupo</button>
+          </div>
+
+          <div class="editor-pane" id="singlePane" role="tabpanel" aria-labelledby="tabSingle">
           <form id="productForm" novalidate>
             <div class="upload-zone" id="uploadZone">
               <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden>
@@ -197,6 +203,60 @@
             </button>
             <p class="publish-note">Se guarda un commit en GitHub y la web se reconstruye sola.</p>
           </form>
+          </div>
+
+          <div class="editor-pane" id="batchPane" role="tabpanel" aria-labelledby="tabBatch" hidden>
+            <form id="batchForm" novalidate>
+              <p class="batch-intro">Elige la categoría y la línea, añade todas las fotos del grupo y publícalas juntas. Los nombres y las referencias se generan solos y puedes ajustarlos antes de subir.</p>
+
+              <div class="field-row">
+                <label class="field">
+                  <span>Categoría del grupo</span>
+                  <select id="bCategory" required></select>
+                </label>
+                <label class="field">
+                  <span>Línea</span>
+                  <input id="bLine" type="text" list="batchLineOptions" maxlength="50" placeholder="Ej. Oversize">
+                  <datalist id="batchLineOptions"></datalist>
+                </label>
+              </div>
+
+              <div class="field-row">
+                <label class="field">
+                  <span>Precio USD <em>para todo el grupo</em></span>
+                  <input id="bPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ej. 20">
+                </label>
+                <label class="field">
+                  <span>Nota de precio <em>opcional</em></span>
+                  <input id="bPriceNote" type="text" maxlength="70" placeholder="Ej. Precio a tasa BCV">
+                </label>
+              </div>
+
+              <div class="upload-zone upload-zone-batch" id="bDropZone">
+                <input id="bPhotoInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden>
+                <div class="upload-empty">
+                  <span class="upload-icon" aria-hidden="true">＋</span>
+                  <strong>Arrastra o toca para subir varias fotos</strong>
+                  <small>Se optimizan solas · JPG, PNG, WebP o HEIC</small>
+                </div>
+              </div>
+              <p class="field-hint" id="bHint">Puedes seguir añadiendo fotos al mismo grupo antes de publicar.</p>
+
+              <div class="batch-bar">
+                <span id="bCount">0 piezas en el grupo</span>
+                <button class="text-btn" id="bClear" type="button" hidden>Vaciar grupo</button>
+              </div>
+
+              <ul class="batch-list" id="bList"></ul>
+
+              <p class="form-error" id="bError" role="alert" hidden></p>
+              <button class="btn btn-dark btn-full" id="bSaveBtn" type="submit" disabled>
+                <span id="bSaveText">Publicar grupo</span>
+                <span class="arrow" aria-hidden="true">↑</span>
+              </button>
+              <p class="publish-note" id="bProgress">Todo el grupo se publica en un solo commit.</p>
+            </form>
+          </div>
         </aside>
       </div>
     </main>

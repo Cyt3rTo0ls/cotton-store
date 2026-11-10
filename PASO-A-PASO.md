@@ -216,10 +216,14 @@ assets/data/catalog.json       Datos generados
 assets/img/catalog/            WebP grandes + thumbs/
 assets/img/categories/         Portadas de categorías
 assets/img/hero/               3 fotos del hero
+assets/img/about/              Arte de la marca en la sección Nosotros
+assets/img/share/              Miniatura JPEG por pieza (vista previa WhatsApp)
+p/                             Página de cada pieza con Open Graph (generadas)
 assets/img/logo.* mark.*        Marca
 assets/img/og.jpg              Imagen social
 tools/sync_catalog.py          Descarga del Drive
 tools/build_assets.py          Procesa imágenes y genera el JSON
+tools/build_share.py           Genera p/ y assets/img/share/
 tools/drive_manifest.json      Caché (ignorado)
 PASO-A-PASO.md                 Este documento
 README.md                      Resumen y comandos
@@ -242,7 +246,11 @@ python3 -m http.server 8099
 python3 tools/sync_catalog.py
 
 # 3. Reconstruir imágenes y JSON (después de agregar piezas o cambiar precios)
+#    build_assets.py ya regenera también las páginas de compartir.
 python3 tools/build_assets.py
+
+# 3b. Solo regenerar las páginas de compartir (sin tocar imágenes)
+python3 tools/build_share.py
 
 # 4. Verificar sintaxis
 node --check assets/js/catalogo.js && node --check assets/js/home.js
@@ -314,6 +322,41 @@ Para precios por pieza individual habría que agregar un campo manual en el JSON
 - Estilos: variables al inicio de `assets/css/styles.css`.
 
 ---
+
+## 9b. Pedidos por WhatsApp con vista previa de la pieza
+
+El botón **Pedir esta pieza** es un enlace directo `wa.me` (sin JavaScript de por
+medio), así que abre WhatsApp en Android, iPhone y computadora. El mensaje lleva
+la referencia, el precio y una URL propia de la pieza:
+
+```
+https://cyt3rto0ls.github.io/cotton-store/p/fr-ali-01.html
+```
+
+Esa página (`p/<referencia>.html`) trae metadatos `og:title`, `og:description` y
+`og:image` con la foto cuadrada `assets/img/share/<referencia>.jpg`, de modo que
+WhatsApp muestra la vista previa del producto en el chat. Las páginas son
+`noindex` para no duplicar el catálogo en buscadores.
+
+- Se generan con `tools/build_share.py` (y `build_assets.py` lo llama al final).
+- El panel privado las crea también al publicar una pieza nueva, editarla o
+  borrarla. Si cambia la referencia, mueve la página y la miniatura.
+- La constante `SITE` (JS, `tools/build_share.py`) apunta a la URL de Pages; si
+  se pasa a dominio propio hay que actualizarla en esos dos lugares.
+
+### Subir varias piezas de un grupo (panel)
+
+El panel (`CottonStore/`) tiene dos pestañas en el editor: **Una pieza** y
+**Varias por grupo**. La segunda permite:
+
+1. Elegir categoría y línea (y precio/nota para todo el grupo).
+2. Arrastrar o seleccionar todas las fotos a la vez.
+3. Revisar nombre y referencia generados (editables) y publicar.
+
+Todo el grupo va en **un solo commit**: imágenes grandes, miniaturas, vista
+previa JPEG, página de la pieza y `catalog.json`. Los blobs se suben en paralelo
+(5 a la vez) para que el panel no tarde de más, y las fotos se optimizan en el
+navegador antes de subir.
 
 ## 10. Verificación hecha
 
