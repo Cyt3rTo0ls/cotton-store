@@ -336,9 +336,13 @@ a { color: inherit; }
 .batch-back { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .batch-back-thumb { width: 26px; height: 32px; border-radius: 4px; object-fit: cover; background: var(--paper-2); }
 .batch-back-btn, .batch-back-del {
+  display: inline-flex; align-items: center; gap: 4px;
   border: 1px dashed #c7c0b3; border-radius: 6px; background: transparent;
   padding: 4px 8px; font-size: 9.5px; font-weight: 700; letter-spacing: .03em;
   color: var(--muted); cursor: pointer;
+}
+.batch-back-input {
+  position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden;
 }
 .batch-back-btn:hover, .batch-back-del:hover { border-color: var(--ink); color: var(--ink); }
 .batch-back-del { border-style: solid; }
@@ -361,6 +365,10 @@ a { color: inherit; }
 .upload-zone-back .upload-empty { padding: 16px; }
 .upload-zone-back .upload-empty strong em { font-style: normal; font-weight: 500; color: var(--muted); }
 .upload-zone-back .upload-preview img { width: 68px; height: 84px; }
+.zone-file {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 .upload-empty { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 26px 18px; text-align: center; }
 .upload-icon { font-size: 25px; line-height: 1; color: #8f887b; margin-bottom: 4px; }
 .upload-empty strong { font-family: var(--display); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }

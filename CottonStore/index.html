@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="admin.css?v=2">
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -168,8 +168,8 @@
 
             <div class="field back-field">
               <span>Foto de la parte trasera <em>opcional</em></span>
-              <div class="upload-zone upload-zone-back" id="backZone">
-              <input id="backInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden>
+              <label class="upload-zone upload-zone-back" id="backZone" for="backInput">
+              <input id="backInput" class="zone-file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif">
               <div class="upload-empty" id="backEmpty">
                 <span class="upload-icon" aria-hidden="true">＋</span>
                 <strong>Subir parte trasera <em>opcional</em></strong>
@@ -188,7 +188,7 @@
                 <span class="spinner" aria-hidden="true"></span>
                 <span>Optimizando foto…</span>
               </div>
-              </div>
+              </label>
               <p class="field-hint" id="backHint">Opcional: súbela si la pieza tiene diseño en la espalda. El cliente podrá ver la parte frontal y la trasera.</p>
             </div>
 
@@ -263,7 +263,6 @@
 
               <div class="upload-zone upload-zone-batch" id="bDropZone">
                 <input id="bPhotoInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden>
-                <input id="bBackInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden>
                 <div class="upload-empty">
                   <span class="upload-icon" aria-hidden="true">＋</span>
                   <strong>Arrastra o toca para subir varias fotos</strong>
@@ -351,6 +350,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="auth-config.js"></script>
-  <script src="admin.js" defer></script>
+  <script src="admin.js?v=2" defer></script>
 </body>
 </html>

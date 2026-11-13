@@ -59,7 +59,6 @@ const state = {
   mode: "single",
   batch: [],
   batchSeq: 0,
-  batchBackTarget: "",
   deleteRef: null,
   toastTimer: 0
 };
@@ -134,7 +133,6 @@ const el = {
   bPriceNote: $("bPriceNote"),
   bDropZone: $("bDropZone"),
   bPhotoInput: $("bPhotoInput"),
-  bBackInput: $("bBackInput"),
   bCount: $("bCount"),
   bClear: $("bClear"),
   bList: $("bList"),
@@ -1338,7 +1336,10 @@ function renderBatchList() {
           <span class="batch-state">${esc(batchStateText(row))}</span>
           <div class="batch-back">
             <img class="batch-back-thumb" src="${row.backPreviewUrl || blank}" alt="" width="26" height="32"${row.backPreviewUrl ? "" : " hidden"}>
-            <button class="batch-back-btn" type="button" data-action="back">${row.backPreviewUrl ? "Cambiar parte trasera" : "＋ Parte trasera (opcional)"}</button>
+            <label class="batch-back-btn" for="back-${row.id}">
+              ${row.backPreviewUrl ? "Cambiar parte trasera" : "＋ Parte trasera (opcional)"}
+              <input class="batch-back-input" id="back-${row.id}" data-id="${row.id}" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif">
+            </label>
             ${row.backPreviewUrl ? '<button class="batch-back-del" type="button" data-action="back-remove">Quitar</button>' : ""}
             <span class="batch-back-state">${esc(batchBackText(row))}</span>
           </div>
@@ -2255,13 +2256,8 @@ function bindEvents() {
   el.photoInput.addEventListener("change", () => handlePhoto(el.photoInput.files && el.photoInput.files[0]));
 
   if (el.backZone) {
-    el.backZone.setAttribute("role", "button");
     el.backZone.setAttribute("tabindex", "0");
     el.backZone.setAttribute("aria-label", "Subir parte trasera de la pieza (opcional)");
-    el.backZone.addEventListener("click", (event) => {
-      if (event.target.closest("button")) return;
-      el.backInput.click();
-    });
     el.backZone.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
@@ -2338,11 +2334,6 @@ function bindEvents() {
       const row = state.batch.find((entry) => entry.id === (li && li.dataset.id));
       if (!row) return;
       const action = button.dataset.action;
-      if (action === "back") {
-        state.batchBackTarget = row.id;
-        if (el.bBackInput) el.bBackInput.click();
-        return;
-      }
       if (action === "back-remove") {
         if (row.backPreviewUrl) URL.revokeObjectURL(row.backPreviewUrl);
         row.backPreviewUrl = "";
@@ -2365,15 +2356,14 @@ function bindEvents() {
       }
     });
 
-    if (el.bBackInput) {
-      el.bBackInput.addEventListener("change", () => {
-        const file = el.bBackInput.files && el.bBackInput.files[0];
-        const row = state.batch.find((entry) => entry.id === state.batchBackTarget);
-        el.bBackInput.value = "";
-        state.batchBackTarget = "";
-        if (row && file) processBatchBack(row, file);
-      });
-    }
+    el.bList.addEventListener("change", (event) => {
+      const input = event.target.closest(".batch-back-input");
+      if (!input) return;
+      const row = state.batch.find((entry) => entry.id === input.dataset.id);
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (row && file) processBatchBack(row, file);
+    });
   }
 
   if (el.bDropZone && el.bPhotoInput) {
