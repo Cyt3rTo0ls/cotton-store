@@ -861,6 +861,17 @@ h1, h2, h3 {
 }
 .card:hover .card-media img { transform: scale(1.045); }
 .card:hover .card-media::after { opacity: 1; }
+.card-media .card-img-back {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease);
+}
+.card:hover .card-img-back,
+.card:focus-within .card-img-back { opacity: 1; }
+@media (hover: none) {
+  .card-media .card-img-back { display: none; }
+}
 
 .card-ref {
   position: absolute;
@@ -1402,6 +1413,35 @@ a.contact-card:hover .contact-arrow { color: var(--white); }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+}
+.modal-views {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+.modal-views[hidden] { display: none; }
+.modal-view {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  background: rgba(251, 249, 245, 0.92);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.modal-view:hover { border-color: var(--ink); color: var(--ink); }
+.modal-view.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--white);
 }
 
 .modal-info {

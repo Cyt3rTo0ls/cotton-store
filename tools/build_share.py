@@ -84,6 +84,24 @@ def page_html(item: dict) -> str:
         f"../catalogo.html?cat={e(item.get('category', ''))}&p={e(item['ref'])}"
     )
     media = item.get("thumb") or item.get("img") or ""
+
+    def media_src(value: str) -> str:
+        """Ruta relativa para archivos del repo, tal cual para Storage/URLs."""
+        value = str(value or "")
+        if re.match(r"^(https?:|data:|/)", value):
+            return value
+        return f"../{value}"
+
+    back = ""
+    if item.get("imgBack"):
+        back_media = item.get("thumbBack") or item.get("imgBack")
+        back_alt = item.get("altBack") or f"{item['name']} — parte trasera"
+        back = (
+            f'\n  <a class="media" href="{catalog_url}">'
+            f'<img src="{e(media_src(back_media))}" alt="{e(back_alt)}" '
+            f'width="{int(item.get("wBack") or 1280)}" '
+            f'height="{int(item.get("hBack") or 1600)}"></a>'
+        )
     wa = f"https://wa.me/{WHATSAPP}?text=" + html.escape(
         __import__("urllib.parse", fromlist=["quote"]).quote(wa_text(item)),
         quote=True,
@@ -138,7 +156,7 @@ h1{{margin:0;font-size:24px;line-height:1.05;letter-spacing:-.03em;text-transfor
 </head>
 <body>
 <main class="card">
-  <a class="media" href="{catalog_url}"><img src="../{e(media)}" alt="{e(item.get('alt') or item['name'])}" width="{int(item.get('w') or 1280)}" height="{int(item.get('h') or 1600)}"></a>
+  <a class="media" href="{catalog_url}"><img src="{e(media_src(media))}" alt="{e(item.get('alt') or item['name'])}" width="{int(item.get('w') or 1280)}" height="{int(item.get('h') or 1600)}"></a>{back}
   <div class="info">
     <p class="kicker">{kicker}</p>
     <h1>{e(item['name'])}</h1>

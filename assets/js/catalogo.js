@@ -28,6 +28,9 @@
   const sentinel = $("#sentinel");
   const modal = $("#productModal");
   const modalImg = $("#modalImg");
+  const modalViews = $("#modalViews");
+  const viewFront = $("#viewFront");
+  const viewBack = $("#viewBack");
   const modalTitle = $("#modalTitle");
   const modalCat = $("#modalCat");
   const modalRef = $("#modalRef");
@@ -333,6 +336,7 @@
         <button class="card-media" type="button" aria-label="Ver ${esc(item.name)}, referencia ${esc(item.ref)}">
           <img src="${item.thumb}" alt="${esc(item.alt)}" width="${item.w}" height="${item.h}"
                loading="${state.shown === 0 && i < 4 ? "eager" : "lazy"}" decoding="async">
+          ${item.thumbBack ? `<img class="card-img-back" src="${item.thumbBack}" alt="" width="${item.wBack || item.w}" height="${item.hBack || item.h}" loading="lazy" decoding="async">` : ""}
           <span class="card-ref">${esc(item.ref)}</span>
           <span class="card-cta">Ver pieza <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></span>
         </button>
@@ -425,10 +429,7 @@
   /* ---------- modal ---------- */
   function fillModal(item, index) {
     const cat = catBySlug()[item.category];
-    modalImg.src = item.img;
-    modalImg.alt = item.alt;
-    modalImg.width = item.w;
-    modalImg.height = item.h;
+    setModalView("front", item);
     modalTitle.textContent = item.name;
     modalCat.textContent = `${item.categoryLabel}${item.line ? ` · Línea ${item.line}` : ""}`;
     modalRef.textContent = item.ref;
@@ -469,6 +470,29 @@
         const neighbor = state.filtered[(i + state.filtered.length) % state.filtered.length];
         if (neighbor) new Image().src = neighbor.img;
       });
+    }
+  }
+
+  // Frente / atrás: solo aparece el selector si la pieza tiene foto trasera.
+  function setModalView(view, item) {
+    const current = item || state.filtered[state.current];
+    if (!current) return;
+    const hasBack = Boolean(current.imgBack);
+    const isBack = hasBack && view === "back";
+    modalImg.src = isBack ? current.imgBack : current.img;
+    modalImg.alt = isBack
+      ? current.altBack || `${current.name} — parte trasera`
+      : current.alt;
+    modalImg.width = isBack ? current.wBack || current.w : current.w;
+    modalImg.height = isBack ? current.hBack || current.h : current.h;
+    if (modalViews) modalViews.hidden = !hasBack;
+    if (viewFront) {
+      viewFront.classList.toggle("is-active", !isBack);
+      viewFront.setAttribute("aria-pressed", String(!isBack));
+    }
+    if (viewBack) {
+      viewBack.classList.toggle("is-active", isBack);
+      viewBack.setAttribute("aria-pressed", String(isBack));
     }
   }
 
@@ -621,6 +645,9 @@
       const item = state.items.find((i) => i.ref === card.dataset.ref);
       if (item) openModal(item);
     });
+
+    if (viewFront) viewFront.addEventListener("click", () => setModalView("front"));
+    if (viewBack) viewBack.addEventListener("click", () => setModalView("back"));
 
     modalClose.addEventListener("click", closeModal);
     modal.querySelector("[data-close]").addEventListener("click", closeModal);

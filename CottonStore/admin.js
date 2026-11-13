@@ -52,10 +52,14 @@ const state = {
   editing: null,
   pendingPhoto: null,
   photoBusy: false,
+  pendingBack: null,
+  backBusy: false,
+  removeBack: false,
   saving: false,
   mode: "single",
   batch: [],
   batchSeq: 0,
+  batchBackTarget: "",
   deleteRef: null,
   toastTimer: 0
 };
@@ -97,6 +101,17 @@ const el = {
   changePhoto: $("changePhoto"),
   uploadWorking: $("uploadWorking"),
   photoHint: $("photoHint"),
+  backZone: $("backZone"),
+  backInput: $("backInput"),
+  backEmpty: $("backEmpty"),
+  backPreview: $("backPreview"),
+  backPreviewImg: $("backPreviewImg"),
+  backPreviewStatus: $("backPreviewStatus"),
+  backPreviewMeta: $("backPreviewMeta"),
+  backChange: $("backChange"),
+  backRemove: $("backRemove"),
+  backWorking: $("backWorking"),
+  backHint: $("backHint"),
   pName: $("pName"),
   pCategory: $("pCategory"),
   pLine: $("pLine"),
@@ -119,6 +134,7 @@ const el = {
   bPriceNote: $("bPriceNote"),
   bDropZone: $("bDropZone"),
   bPhotoInput: $("bPhotoInput"),
+  bBackInput: $("bBackInput"),
   bCount: $("bCount"),
   bClear: $("bClear"),
   bList: $("bList"),
@@ -738,6 +754,7 @@ function renderList() {
           <div class="prod-meta">
             <span class="prod-cat">${esc(label)}</span>
             ${line}
+            ${item.imgBack ? '<span class="prod-back-flag">frente + atrás</span>' : ""}
             <span class="prod-ref">${esc(item.ref)}</span>
           </div>
         </div>
@@ -815,6 +832,8 @@ function resetEditor(preferredCategory, preferredLine) {
   state.pendingPhoto = null;
   el.productForm.reset();
   el.photoInput.value = "";
+  state.removeBack = false;
+  resetBackUI();
   el.pCategory.disabled = false;
   el.uploadEmpty.hidden = false;
   el.uploadPreview.hidden = true;
@@ -871,6 +890,15 @@ function startEdit(ref) {
   el.saveBtnText.textContent = "Guardar cambios";
   el.cancelEdit.hidden = false;
   el.formError.hidden = true;
+  state.removeBack = false;
+  if (item.imgBack) {
+    el.backEmpty.hidden = true;
+    el.backPreview.hidden = false;
+    el.backPreviewImg.src = publicPath(item.thumbBack || item.imgBack);
+    el.backPreviewStatus.textContent = "Parte trasera actual";
+    el.backPreviewMeta.textContent = "Puedes cambiarla o quitarla";
+    el.backHint.textContent = "Así verá el cliente la espalda de la pieza.";
+  }
   el.editorCard.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -981,6 +1009,91 @@ async function handlePhoto(file) {
   }
 }
 
+/* ---------------- parte trasera (opcional) ---------------- */
+
+const BACK_HINT = "Opcional: súbela si la pieza tiene diseño en la espalda. El cliente podrá ver la parte frontal y la trasera.";
+
+function resetBackUI() {
+  if (state.pendingBack && state.pendingBack.previewUrl) {
+    URL.revokeObjectURL(state.pendingBack.previewUrl);
+  }
+  state.pendingBack = null;
+  state.backBusy = false;
+  el.backInput.value = "";
+  el.backPreviewImg.removeAttribute("src");
+  el.backPreview.hidden = true;
+  el.backEmpty.hidden = false;
+  el.backWorking.hidden = true;
+  el.backPreviewStatus.textContent = "Parte trasera lista";
+  el.backPreviewMeta.textContent = "—";
+  el.backHint.textContent = BACK_HINT;
+}
+
+function removeBackPhoto() {
+  if (state.pendingBack && state.pendingBack.previewUrl) {
+    URL.revokeObjectURL(state.pendingBack.previewUrl);
+  }
+  state.pendingBack = null;
+  state.removeBack = true;
+  el.backInput.value = "";
+  el.backPreviewImg.removeAttribute("src");
+  el.backPreview.hidden = true;
+  el.backEmpty.hidden = false;
+  el.backPreviewStatus.textContent = "Parte trasera lista";
+  el.backPreviewMeta.textContent = "—";
+  el.backHint.textContent = "Se quitará la parte trasera al guardar los cambios.";
+}
+
+async function handleBackPhoto(file) {
+  if (!file) return;
+  el.formError.hidden = true;
+  if (!file.type || !file.type.startsWith("image/")) {
+    showFormError("Esa parte trasera no es una imagen. Usa JPG, PNG, WebP o HEIC.");
+    return;
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    showFormError("La foto de atrás pesa demasiado. Usa una imagen de menos de 25 MB.");
+    return;
+  }
+  state.backBusy = true;
+  el.backWorking.hidden = false;
+  el.saveBtn.disabled = true;
+  let source = null;
+  try {
+    source = await decodeImage(file);
+    const full = await renderImage(source, 1280, 1600, 0.80);
+    const thumb = await renderImage(source, 600, 760, 0.74);
+    if (state.pendingBack && state.pendingBack.previewUrl) {
+      URL.revokeObjectURL(state.pendingBack.previewUrl);
+    }
+    const previewUrl = URL.createObjectURL(full.blob);
+    state.pendingBack = {
+      full: full.blob,
+      thumb: thumb.blob,
+      ext: full.ext,
+      thumbExt: thumb.ext,
+      width: full.width,
+      height: full.height,
+      previewUrl
+    };
+    state.removeBack = false;
+    el.backPreviewImg.src = previewUrl;
+    el.backEmpty.hidden = true;
+    el.backPreview.hidden = false;
+    el.backPreviewStatus.textContent = "Parte trasera lista";
+    el.backPreviewMeta.textContent = `${full.width} × ${full.height} px · ${formatBytes(full.blob.size)}`;
+    el.backHint.textContent = "Así verá el cliente la espalda de la pieza.";
+  } catch (err) {
+    showFormError(err.message || "No se pudo procesar la parte trasera.");
+  } finally {
+    if (source && typeof source.close === "function") source.close();
+    state.backBusy = false;
+    el.backWorking.hidden = true;
+    el.saveBtn.disabled = false;
+    el.backInput.value = "";
+  }
+}
+
 /* ---------------- compartir: vista previa con la foto ---------------- */
 
 function shareSlug(ref) {
@@ -1019,6 +1132,9 @@ function sharePageHTML(item) {
   const waHref = `https://wa.me/${phone}?text=${encodeURIComponent(waMessage(item))}`;
   const kicker = item.line ? `${item.categoryLabel} · ${item.line}` : item.categoryLabel;
   const note = item.priceNote ? `<p class="note">${esc(item.priceNote)}</p>` : "";
+  const backMedia = item.imgBack
+    ? `\n  <a class="media" href="${esc(localURL)}"><img src="${esc(pagePath(item.thumbBack || item.imgBack))}" alt="${esc(item.altBack || `${item.name} — parte trasera`)}" width="${Number(item.wBack) || 1280}" height="${Number(item.hBack) || 1600}"></a>`
+    : "";
 
   return `<!doctype html>
 <html lang="es">
@@ -1066,7 +1182,7 @@ h1{margin:0;font-size:24px;line-height:1.05;letter-spacing:-.03em;text-transform
 </head>
 <body>
 <main class="card">
-  <a class="media" href="${esc(localURL)}"><img src="${esc(pagePath(item.thumb || item.img || ""))}" alt="${esc(item.alt || item.name)}" width="${Number(item.w) || 1280}" height="${Number(item.h) || 1600}"></a>
+  <a class="media" href="${esc(localURL)}"><img src="${esc(pagePath(item.thumb || item.img || ""))}" alt="${esc(item.alt || item.name)}" width="${Number(item.w) || 1280}" height="${Number(item.h) || 1600}"></a>${backMedia}
   <div class="info">
     <p class="kicker">${esc(kicker)}</p>
     <h1>${esc(item.name)}</h1>
@@ -1201,6 +1317,13 @@ function updateBatchRow(row) {
   }
 }
 
+function batchBackText(row) {
+  if (row.backStatus === "working") return "Optimizando parte trasera…";
+  if (row.backStatus === "error") return row.backError || "No se pudo cargar la parte trasera.";
+  if (row.backPreviewUrl) return "Parte trasera lista";
+  return "";
+}
+
 function renderBatchList() {
   if (!el.bList) return;
   const blank = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
@@ -1213,11 +1336,49 @@ function renderBatchList() {
           <input class="batch-name" data-field="name" value="${esc(row.name)}" maxlength="80" placeholder="Nombre de la pieza" aria-label="Nombre de la pieza">
           <input class="batch-ref" data-field="ref" value="${esc(row.ref)}" maxlength="28" placeholder="Referencia" aria-label="Referencia de la pieza">
           <span class="batch-state">${esc(batchStateText(row))}</span>
+          <div class="batch-back">
+            <img class="batch-back-thumb" src="${row.backPreviewUrl || blank}" alt="" width="26" height="32"${row.backPreviewUrl ? "" : " hidden"}>
+            <button class="batch-back-btn" type="button" data-action="back">${row.backPreviewUrl ? "Cambiar parte trasera" : "＋ Parte trasera (opcional)"}</button>
+            ${row.backPreviewUrl ? '<button class="batch-back-del" type="button" data-action="back-remove">Quitar</button>' : ""}
+            <span class="batch-back-state">${esc(batchBackText(row))}</span>
+          </div>
         </div>
         <button class="batch-remove" type="button" data-action="remove" aria-label="Quitar esta foto">×</button>
       </li>`
     )
     .join("");
+}
+
+async function processBatchBack(row, file) {
+  if (!row || !file) return;
+  if (!file.type || !file.type.startsWith("image/") || file.size > 25 * 1024 * 1024) {
+    showBatchError("La parte trasera debe ser una imagen de menos de 25 MB.");
+    return;
+  }
+  row.backStatus = "working";
+  row.backError = "";
+  renderBatchList();
+  let source = null;
+  try {
+    source = await decodeImage(file);
+    const full = await renderImage(source, 1280, 1600, 0.8);
+    const thumb = await renderImage(source, 600, 760, 0.74);
+    if (row.backPreviewUrl) URL.revokeObjectURL(row.backPreviewUrl);
+    row.backFull = full.blob;
+    row.backThumb = thumb.blob;
+    row.backExt = full.ext;
+    row.backWidth = full.width;
+    row.backHeight = full.height;
+    row.backPreviewUrl = URL.createObjectURL(full.blob);
+    row.backStatus = "ready";
+  } catch (err) {
+    row.backStatus = "error";
+    row.backError = err && err.message ? err.message : "No se pudo procesar la parte trasera.";
+  } finally {
+    if (source && typeof source.close === "function") source.close();
+    renderBatchList();
+    updateBatchControls();
+  }
 }
 
 function syncBatchNames() {
@@ -1285,6 +1446,7 @@ function updateBatchControls() {
 function clearBatch() {
   for (const row of state.batch) {
     if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+    if (row.backPreviewUrl) URL.revokeObjectURL(row.backPreviewUrl);
   }
   state.batch = [];
   renderBatchList();
@@ -1356,7 +1518,15 @@ async function addBatchFiles(files) {
       thumbExt: "",
       width: 0,
       height: 0,
-      error: ""
+      error: "",
+      backFull: null,
+      backThumb: null,
+      backExt: "",
+      backWidth: 0,
+      backHeight: 0,
+      backPreviewUrl: "",
+      backStatus: "none",
+      backError: ""
     };
   });
   state.batch.push(...rows);
@@ -1437,6 +1607,14 @@ async function saveBatch(event) {
         h: row.height,
         alt: `${row.name} — ${cat.label} de Cotton Store`
       };
+      if (row.backFull && row.backThumb) {
+        const backPaths = storagePaths(cat.slug, row.ref, row.backExt, "back");
+        item.imgBack = await uploadPhoto(backPaths.imgPath, row.backFull);
+        item.thumbBack = await uploadPhoto(backPaths.thumbPath, row.backThumb);
+        item.wBack = row.backWidth;
+        item.hBack = row.backHeight;
+        item.altBack = `${row.name} — parte trasera · ${cat.label} de Cotton Store`;
+      }
       next.items.push(item);
 
       const slug = shareSlug(item.ref);
@@ -1530,16 +1708,17 @@ function recomputeCatalog(data) {
   data.generated = new Date().toISOString().slice(0, 10);
 }
 
-function storagePaths(category, ref, ext) {
+function storagePaths(category, ref, ext, variant = "") {
   const stem = slugify(ref);
+  const variantName = variant ? `-${variant}` : "";
   let suffix = 1;
   let name;
   let path;
   let thumbPath;
   do {
     name = suffix === 1 ? stem : `${stem}-${suffix}`;
-    path = `catalog/${category}/${name}.${ext}`;
-    thumbPath = `thumbs/${category}/${name}.${ext}`;
+    path = `catalog/${category}/${name}${variantName}.${ext}`;
+    thumbPath = `thumbs/${category}/${name}${variantName}.${ext}`;
     suffix += 1;
   } while (state.data.items.some((item) => {
     const usedImg = String(item.img || "");
@@ -1564,6 +1743,7 @@ function validateForm() {
   if (duplicate) return { error: `La referencia ${ref} ya existe en el catálogo.` };
   if (!state.editing && !state.pendingPhoto) return { error: "Sube una foto para la pieza nueva." };
   if (state.photoBusy) return { error: "Espera a que la foto termine de optimizarse." };
+  if (state.backBusy) return { error: "Espera a que la parte trasera termine de optimizarse." };
   if (state.pendingPhoto && state.pendingPhoto.ext !== state.pendingPhoto.thumbExt) {
     return { error: "La foto no se pudo preparar completa. Vuelve a cargarla." };
   }
@@ -1617,6 +1797,24 @@ async function saveProduct(event) {
     }
     if (!img || !thumb) throw new Error("La pieza necesita una foto. Vuelve a cargarla.");
 
+    // Parte trasera: opcional. Se conserva la actual si no se cambia ni se quita.
+    let imgBack = editingItem ? editingItem.imgBack || "" : "";
+    let thumbBack = editingItem ? editingItem.thumbBack || "" : "";
+    let widthBack = editingItem ? editingItem.wBack || 0 : 0;
+    let heightBack = editingItem ? editingItem.hBack || 0 : 0;
+    if (state.pendingBack) {
+      const pathsBack = storagePaths(values.category, values.ref, state.pendingBack.ext, "back");
+      imgBack = await uploadPhoto(pathsBack.imgPath, state.pendingBack.full);
+      thumbBack = await uploadPhoto(pathsBack.thumbPath, state.pendingBack.thumb);
+      widthBack = state.pendingBack.width;
+      heightBack = state.pendingBack.height;
+    } else if (state.removeBack) {
+      imgBack = "";
+      thumbBack = "";
+      widthBack = 0;
+      heightBack = 0;
+    }
+
     const item = {
       ref: values.ref,
       name: values.name,
@@ -1632,6 +1830,13 @@ async function saveProduct(event) {
       h: height,
       alt: `${values.name} — ${category.label} de Cotton Store`
     };
+    if (imgBack && thumbBack) {
+      item.imgBack = imgBack;
+      item.thumbBack = thumbBack;
+      item.wBack = widthBack;
+      item.hBack = heightBack;
+      item.altBack = `${values.name} — parte trasera · ${category.label} de Cotton Store`;
+    }
 
     let message;
     if (editingItem) {
@@ -2048,6 +2253,31 @@ function bindEvents() {
     el.photoInput.click();
   });
   el.photoInput.addEventListener("change", () => handlePhoto(el.photoInput.files && el.photoInput.files[0]));
+
+  if (el.backZone) {
+    el.backZone.setAttribute("role", "button");
+    el.backZone.setAttribute("tabindex", "0");
+    el.backZone.setAttribute("aria-label", "Subir parte trasera de la pieza (opcional)");
+    el.backZone.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      el.backInput.click();
+    });
+    el.backZone.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        el.backInput.click();
+      }
+    });
+    el.backInput.addEventListener("change", () => handleBackPhoto(el.backInput.files && el.backInput.files[0]));
+    el.backChange.addEventListener("click", (event) => {
+      event.stopPropagation();
+      el.backInput.click();
+    });
+    el.backRemove.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removeBackPhoto();
+    });
+  }
   ["dragenter", "dragover"].forEach((name) => {
     el.uploadZone.addEventListener(name, (event) => {
       event.preventDefault();
@@ -2102,17 +2332,48 @@ function bindEvents() {
       el.bError.hidden = true;
     });
     el.bList.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-action='remove']");
+      const button = event.target.closest("[data-action]");
       if (!button) return;
       const li = button.closest(".batch-item");
-      const index = state.batch.findIndex((entry) => entry.id === (li && li.dataset.id));
-      if (index < 0) return;
-      const row = state.batch[index];
-      if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
-      state.batch.splice(index, 1);
-      renderBatchList();
-      updateBatchControls();
+      const row = state.batch.find((entry) => entry.id === (li && li.dataset.id));
+      if (!row) return;
+      const action = button.dataset.action;
+      if (action === "back") {
+        state.batchBackTarget = row.id;
+        if (el.bBackInput) el.bBackInput.click();
+        return;
+      }
+      if (action === "back-remove") {
+        if (row.backPreviewUrl) URL.revokeObjectURL(row.backPreviewUrl);
+        row.backPreviewUrl = "";
+        row.backFull = null;
+        row.backThumb = null;
+        row.backStatus = "none";
+        row.backError = "";
+        renderBatchList();
+        updateBatchControls();
+        return;
+      }
+      if (action === "remove") {
+        const index = state.batch.indexOf(row);
+        if (index < 0) return;
+        if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+        if (row.backPreviewUrl) URL.revokeObjectURL(row.backPreviewUrl);
+        state.batch.splice(index, 1);
+        renderBatchList();
+        updateBatchControls();
+      }
     });
+
+    if (el.bBackInput) {
+      el.bBackInput.addEventListener("change", () => {
+        const file = el.bBackInput.files && el.bBackInput.files[0];
+        const row = state.batch.find((entry) => entry.id === state.batchBackTarget);
+        el.bBackInput.value = "";
+        state.batchBackTarget = "";
+        if (row && file) processBatchBack(row, file);
+      });
+    }
   }
 
   if (el.bDropZone && el.bPhotoInput) {

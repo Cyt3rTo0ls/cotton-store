@@ -166,6 +166,32 @@
             </div>
             <p class="field-hint" id="photoHint">La foto es obligatoria para una pieza nueva.</p>
 
+            <div class="field back-field">
+              <span>Foto de la parte trasera <em>opcional</em></span>
+              <div class="upload-zone upload-zone-back" id="backZone">
+              <input id="backInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden>
+              <div class="upload-empty" id="backEmpty">
+                <span class="upload-icon" aria-hidden="true">＋</span>
+                <strong>Subir parte trasera <em>opcional</em></strong>
+                <small>Si la pieza tiene diseño atrás · JPG, PNG, WebP o HEIC</small>
+              </div>
+              <div class="upload-preview" id="backPreview" hidden>
+                <img id="backPreviewImg" alt="Vista previa de la parte trasera">
+                <div class="upload-preview-info">
+                  <strong id="backPreviewStatus">Parte trasera lista</strong>
+                  <small id="backPreviewMeta">—</small>
+                  <button class="text-btn" id="backChange" type="button">Cambiar</button>
+                  <button class="text-btn" id="backRemove" type="button">Quitar</button>
+                </div>
+              </div>
+              <div class="upload-working" id="backWorking" hidden>
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Optimizando foto…</span>
+              </div>
+              </div>
+              <p class="field-hint" id="backHint">Opcional: súbela si la pieza tiene diseño en la espalda. El cliente podrá ver la parte frontal y la trasera.</p>
+            </div>
+
             <label class="field">
               <span>Nombre de la pieza</span>
               <input id="pName" type="text" maxlength="80" placeholder="Ej. Franela Oversize 35" required>
@@ -237,6 +263,7 @@
 
               <div class="upload-zone upload-zone-batch" id="bDropZone">
                 <input id="bPhotoInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden>
+                <input id="bBackInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden>
                 <div class="upload-empty">
                   <span class="upload-icon" aria-hidden="true">＋</span>
                   <strong>Arrastra o toca para subir varias fotos</strong>

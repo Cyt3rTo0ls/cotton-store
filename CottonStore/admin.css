@@ -262,6 +262,7 @@ a { color: inherit; }
 }
 .prod-meta { display: flex; flex-wrap: wrap; gap: 5px 8px; color: var(--muted); font-size: 10.5px; }
 .prod-ref { font-family: var(--display); font-size: 9px; font-weight: 700; letter-spacing: .06em; color: #9b9488; }
+.prod-back-flag { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #4d6b4f; }
 .prod-cat { text-transform: capitalize; }
 .prod-price {
   font-family: var(--display); font-size: 14px; font-weight: 800;
@@ -332,6 +333,18 @@ a { color: inherit; }
 }
 .batch-state { font-size: 9.5px; line-height: 1.3; color: var(--muted); }
 .batch-item.is-error .batch-state { color: var(--red); }
+.batch-back { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.batch-back-thumb { width: 26px; height: 32px; border-radius: 4px; object-fit: cover; background: var(--paper-2); }
+.batch-back-btn, .batch-back-del {
+  border: 1px dashed #c7c0b3; border-radius: 6px; background: transparent;
+  padding: 4px 8px; font-size: 9.5px; font-weight: 700; letter-spacing: .03em;
+  color: var(--muted); cursor: pointer;
+}
+.batch-back-btn:hover, .batch-back-del:hover { border-color: var(--ink); color: var(--ink); }
+.batch-back-del { border-style: solid; }
+.batch-back-state { font-size: 9px; color: var(--muted); }
+.batch-back-state:empty { display: none; }
+.back-field > span { margin-top: 2px; }
 .batch-remove {
   width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 6px;
   background: transparent; color: var(--muted); font-size: 15px; line-height: 1;
@@ -344,6 +357,10 @@ a { color: inherit; }
   overflow: hidden; cursor: pointer; transition: border-color .18s, background .18s;
 }
 .upload-zone:hover, .upload-zone.is-drag { border-color: var(--ink); background: #ede8dd; }
+.upload-zone-back { min-height: 96px; margin-top: 0; }
+.upload-zone-back .upload-empty { padding: 16px; }
+.upload-zone-back .upload-empty strong em { font-style: normal; font-weight: 500; color: var(--muted); }
+.upload-zone-back .upload-preview img { width: 68px; height: 84px; }
 .upload-empty { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 26px 18px; text-align: center; }
 .upload-icon { font-size: 25px; line-height: 1; color: #8f887b; margin-bottom: 4px; }
 .upload-empty strong { font-family: var(--display); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
